@@ -160,4 +160,4 @@ Future checks should alert only genuinely new or changed events.
 
 - Keep only one scheduled instance running. If you scale the Render service above one instance, the scheduler may run more than once.
 - For a larger production setup, move the scheduler into a separate worker or cron job.
-- Add Alembic migrations before making frequent schema changes.
+- Alembic is now configured. See `MIGRATIONS.md` before making future schema changes.

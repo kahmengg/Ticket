@@ -36,18 +36,17 @@ def init_db() -> None:
     from app import models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
-    _apply_sqlite_dev_migrations()
+    _ensure_alembic_version()
 
 
-def _apply_sqlite_dev_migrations() -> None:
-    if not settings.database_url.startswith("sqlite"):
-        return
-
+def _ensure_alembic_version() -> None:
     inspector = inspect(engine)
-    if "alerts" not in inspector.get_table_names():
+    table_names = inspector.get_table_names()
+    if "alembic_version" in table_names or not table_names:
         return
 
-    alert_columns = {column["name"] for column in inspector.get_columns("alerts")}
     with engine.begin() as connection:
-        if "chat_id" not in alert_columns:
-            connection.execute(text("ALTER TABLE alerts ADD COLUMN chat_id VARCHAR(100)"))
+        connection.execute(text("CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(32) NOT NULL)"))
+        current_version = connection.execute(text("SELECT version_num FROM alembic_version LIMIT 1")).scalar()
+        if current_version is None:
+            connection.execute(text("INSERT INTO alembic_version (version_num) VALUES ('20260615_0001')"))

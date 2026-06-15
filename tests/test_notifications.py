@@ -26,7 +26,9 @@ def test_format_event_message_removes_leading_year_and_adds_calendar_link():
     assert "Venue: Singapore Indoor Stadium" in message
     assert "Event date: 2026-11-28T10:00:00" in message
     assert "Sale date: 2026-06-11T04:00:00" in message
-    assert "Add to calendar: https://calendar.google.com/calendar/render?" in message
+    assert "Add concert to calendar: https://calendar.google.com/calendar/render?" in message
+    assert "Add ticket sale to calendar: https://calendar.google.com/calendar/render?" in message
+    assert "Ticket+sale%3A+BABYMONSTER" in message
 
 
 def test_alert_exists_after_create_alert(db_session):

@@ -118,9 +118,24 @@ def format_event_message(event: Event, alert_type: str = "new_event") -> str:
     if event.presale_date:
         lines.append(f"Presale date: {_format_datetime(event.presale_date)}")
     lines.append(f"URL: {event.url}")
-    calendar_url = _google_calendar_url(event)
-    if calendar_url:
-        lines.append(f"Add to calendar: {calendar_url}")
+    concert_calendar_url = _google_calendar_url(
+        title=_clean_event_title(event.title),
+        start=event.event_date,
+        duration=timedelta(hours=3),
+        details=event.url,
+        location=event.venue_name,
+    )
+    if concert_calendar_url:
+        lines.append(f"Add concert to calendar: {concert_calendar_url}")
+    sale_calendar_url = _google_calendar_url(
+        title=f"Ticket sale: {_clean_event_title(event.title)}",
+        start=event.sale_date,
+        duration=timedelta(minutes=30),
+        details=event.url,
+        location=event.venue_name,
+    )
+    if sale_calendar_url:
+        lines.append(f"Add ticket sale to calendar: {sale_calendar_url}")
     return "\n".join(lines)
 
 
@@ -138,9 +153,24 @@ def format_sale_reminder_message(event: Event, keyword: str, reminder_hours: int
     if event.event_date:
         lines.append(f"Event date: {_format_datetime(event.event_date)}")
     lines.append(f"URL: {event.url}")
-    calendar_url = _google_calendar_url(event)
-    if calendar_url:
-        lines.append(f"Add to calendar: {calendar_url}")
+    sale_calendar_url = _google_calendar_url(
+        title=f"Ticket sale: {_clean_event_title(event.title)}",
+        start=event.sale_date,
+        duration=timedelta(minutes=30),
+        details=event.url,
+        location=event.venue_name,
+    )
+    if sale_calendar_url:
+        lines.append(f"Add ticket sale to calendar: {sale_calendar_url}")
+    concert_calendar_url = _google_calendar_url(
+        title=_clean_event_title(event.title),
+        start=event.event_date,
+        duration=timedelta(hours=3),
+        details=event.url,
+        location=event.venue_name,
+    )
+    if concert_calendar_url:
+        lines.append(f"Add concert to calendar: {concert_calendar_url}")
     return "\n".join(lines)
 
 
@@ -152,22 +182,27 @@ def _format_datetime(value) -> str:
     return value.isoformat().replace("+00:00", "")
 
 
-def _google_calendar_url(event: Event) -> str | None:
-    if not event.event_date:
+def _google_calendar_url(
+    title: str,
+    start,
+    duration: timedelta,
+    details: str,
+    location: str | None = None,
+) -> str | None:
+    if not start:
         return None
 
-    start = event.event_date
     if start.tzinfo is None:
         start = start.replace(tzinfo=timezone.utc)
     start = start.astimezone(timezone.utc)
-    end = start + timedelta(hours=3)
+    end = start + duration
 
     params = {
         "action": "TEMPLATE",
-        "text": _clean_event_title(event.title),
+        "text": title,
         "dates": f"{start.strftime('%Y%m%dT%H%M%SZ')}/{end.strftime('%Y%m%dT%H%M%SZ')}",
-        "details": event.url,
+        "details": details,
     }
-    if event.venue_name:
-        params["location"] = event.venue_name
+    if location:
+        params["location"] = location
     return f"https://calendar.google.com/calendar/render?{urlencode(params)}"

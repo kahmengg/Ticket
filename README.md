@@ -124,6 +124,10 @@ docker run --rm -p 8000:8000 --env-file .env ticket-sale-assistant
 
 See [DEPLOYMENT.md](./DEPLOYMENT.md) for the recommended Render + Supabase production setup.
 
+## Database Migrations
+
+See [MIGRATIONS.md](./MIGRATIONS.md) for Alembic migration commands and workflow.
+
 ## Assumptions
 
 - Live Nation Singapore markup may change, so the scraper uses broad, easy-to-adjust selectors.
