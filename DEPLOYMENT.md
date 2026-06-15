@@ -78,6 +78,7 @@ Or use the included `render.yaml` Blueprint.
 4. Add environment variables in Render:
 
 ```env
+PYTHON_VERSION=3.12.13
 DATABASE_URL=your_supabase_postgres_connection_string
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 TELEGRAM_WEBHOOK_SECRET=make_a_long_random_secret
