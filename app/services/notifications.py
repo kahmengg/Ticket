@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app import crud
 from app.config import settings
 from app.models import Event
+from app.services.watchlist import WatchMatch
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,25 @@ def send_new_event_alerts(events: list[Event], db: Session | None = None) -> int
 
 def send_updated_event_alerts(events: list[Event], db: Session | None = None) -> int:
     return send_event_alerts(events, "event_updated", db)
+
+
+def send_sale_reminder_alerts(matches: list[WatchMatch], reminder_hours: int, db: Session) -> int:
+    if not settings.telegram_bot_token:
+        logger.info("Telegram credentials are missing; skipping sale reminders.")
+        return 0
+
+    sent_count = 0
+    alert_type = f"sale_reminder_{reminder_hours}h"
+    for match in matches:
+        event = match.event
+        if event.id is None or crud.alert_exists(db, event.id, alert_type, match.chat_id):
+            continue
+        message = format_sale_reminder_message(event, match.keyword, reminder_hours)
+        if send_telegram_message_to_chat(match.chat_id, message):
+            sent_count += 1
+            crud.create_alert(db, event.id, alert_type, match.chat_id, message)
+    db.commit()
+    return sent_count
 
 
 def send_telegram_message(message: str, chat_ids: list[str] | None = None) -> int:
@@ -97,6 +117,26 @@ def format_event_message(event: Event, alert_type: str = "new_event") -> str:
         lines.append(f"Sale date: {_format_datetime(event.sale_date)}")
     if event.presale_date:
         lines.append(f"Presale date: {_format_datetime(event.presale_date)}")
+    lines.append(f"URL: {event.url}")
+    calendar_url = _google_calendar_url(event)
+    if calendar_url:
+        lines.append(f"Add to calendar: {calendar_url}")
+    return "\n".join(lines)
+
+
+def format_sale_reminder_message(event: Event, keyword: str, reminder_hours: int) -> str:
+    hours_text = "1 hour" if reminder_hours == 1 else f"{reminder_hours} hours"
+    lines = [
+        f"Reminder: ticket sale starts within {hours_text}",
+        f"Watchlist: {keyword}",
+        _clean_event_title(event.title),
+    ]
+    if event.venue_name:
+        lines.append(f"Venue: {event.venue_name}")
+    if event.sale_date:
+        lines.append(f"Sale date: {_format_datetime(event.sale_date)}")
+    if event.event_date:
+        lines.append(f"Event date: {_format_datetime(event.event_date)}")
     lines.append(f"URL: {event.url}")
     calendar_url = _google_calendar_url(event)
     if calendar_url:

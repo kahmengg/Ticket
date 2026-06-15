@@ -10,6 +10,7 @@ from app.database import get_db
 from app.schemas import EventRead, HealthRead, RunCheckRead, TelegramTestRead
 from app.scheduler import run_livenation_check
 from app.services.notifications import get_notification_chat_ids, send_telegram_message, send_telegram_message_to_chat
+from app.services.telegram_commands import handle_telegram_command
 
 router = APIRouter()
 
@@ -90,11 +91,9 @@ def telegram_webhook(
     )
     db.commit()
 
-    text = str(message.get("text") or "").strip().lower()
-    if text.startswith("/start"):
-        send_telegram_message_to_chat(
-            subscriber.chat_id,
-            "You're subscribed to Ticket Sale Assistant alerts. I'll message this chat when new concerts are detected.",
-        )
+    text = str(message.get("text") or "").strip()
+    command_reply = handle_telegram_command(text, subscriber.chat_id, db)
+    if command_reply:
+        send_telegram_message_to_chat(subscriber.chat_id, command_reply)
 
     return {"ok": True, "saved": True, "chat_id": subscriber.chat_id}

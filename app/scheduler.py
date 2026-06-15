@@ -8,7 +8,8 @@ from app import crud
 from app.database import SessionLocal
 from app.scrapers.livenation_sg import LiveNationSGScraper
 from app.services.event_detector import DetectionResult, process_events
-from app.services.notifications import send_new_event_alerts, send_updated_event_alerts
+from app.services.notifications import send_new_event_alerts, send_sale_reminder_alerts, send_updated_event_alerts
+from app.services.watchlist import sale_reminder_matches
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,25 @@ def run_livenation_check(db: Session | None = None) -> DetectionResult:
             return result
         result.notifications_sent = send_new_event_alerts(result.new_events, session)
         result.notifications_sent += send_updated_event_alerts(result.updated_events, session)
+        result.notifications_sent += run_sale_reminder_check(session)
         return result
+    finally:
+        if owns_session:
+            session.close()
+
+
+def run_sale_reminder_check(db: Session | None = None) -> int:
+    owns_session = db is None
+    session = db or SessionLocal()
+    try:
+        sent_count = 0
+        for reminder_hours in settings.sale_reminder_hours:
+            sent_count += send_sale_reminder_alerts(
+                sale_reminder_matches(session, reminder_hours),
+                reminder_hours,
+                session,
+            )
+        return sent_count
     finally:
         if owns_session:
             session.close()
@@ -39,6 +58,13 @@ def _scheduled_job() -> None:
         logger.exception("Scheduled event check failed.")
 
 
+def _scheduled_reminder_job() -> None:
+    try:
+        run_sale_reminder_check()
+    except Exception:
+        logger.exception("Scheduled sale reminder check failed.")
+
+
 def create_scheduler() -> BackgroundScheduler:
     scheduler = BackgroundScheduler()
     scheduler.add_job(
@@ -46,6 +72,14 @@ def create_scheduler() -> BackgroundScheduler:
         "interval",
         hours=settings.scrape_interval_hours,
         id="livenation_sg_event_check",
+        replace_existing=True,
+        max_instances=1,
+    )
+    scheduler.add_job(
+        _scheduled_reminder_job,
+        "interval",
+        minutes=settings.reminder_interval_minutes,
+        id="ticket_sale_reminder_check",
         replace_existing=True,
         max_instances=1,
     )

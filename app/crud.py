@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.models import Alert, Event, Source, TelegramSubscriber, utc_now
+from app.models import Alert, Event, Source, TelegramSubscriber, WatchlistKeyword, utc_now
 
 
 def get_or_create_source(db: Session, name: str, base_url: str, source_type: str = "official") -> Source:
@@ -40,12 +40,27 @@ def list_events(db: Session) -> list[Event]:
     return list(db.scalars(select(Event).order_by(Event.first_seen_at.desc(), Event.id.desc())))
 
 
+def list_latest_events(db: Session, limit: int = 5) -> list[Event]:
+    return list(db.scalars(select(Event).order_by(Event.first_seen_at.desc(), Event.id.desc()).limit(limit)))
+
+
 def list_upcoming_events(db: Session, now: datetime) -> list[Event]:
     return list(
         db.scalars(
             select(Event)
             .where(or_(Event.event_date >= now, Event.sale_date >= now))
             .order_by(Event.event_date.asc().nulls_last(), Event.sale_date.asc().nulls_last())
+        )
+    )
+
+
+def list_upcoming_events_limited(db: Session, now: datetime, limit: int = 5) -> list[Event]:
+    return list(
+        db.scalars(
+            select(Event)
+            .where(or_(Event.event_date >= now, Event.sale_date >= now))
+            .order_by(Event.event_date.asc().nulls_last(), Event.sale_date.asc().nulls_last())
+            .limit(limit)
         )
     )
 
@@ -113,3 +128,65 @@ def list_active_telegram_chat_ids(db: Session) -> list[str]:
             .order_by(TelegramSubscriber.created_at.asc())
         )
     )
+
+
+def deactivate_telegram_subscriber(db: Session, chat_id: str) -> bool:
+    subscriber = db.scalar(select(TelegramSubscriber).where(TelegramSubscriber.chat_id == chat_id))
+    if subscriber is None:
+        return False
+
+    subscriber.is_active = False
+    subscriber.last_seen_at = utc_now()
+    db.flush()
+    return True
+
+
+def upsert_watchlist_keyword(
+    db: Session,
+    chat_id: str,
+    keyword: str,
+    normalized_keyword: str,
+    compact_keyword: str,
+) -> WatchlistKeyword:
+    watch = db.scalar(
+        select(WatchlistKeyword).where(
+            WatchlistKeyword.chat_id == chat_id,
+            WatchlistKeyword.normalized_keyword == normalized_keyword,
+        )
+    )
+    if watch is None:
+        watch = WatchlistKeyword(
+            chat_id=chat_id,
+            keyword=keyword,
+            normalized_keyword=normalized_keyword,
+            compact_keyword=compact_keyword,
+        )
+        db.add(watch)
+    else:
+        watch.keyword = keyword
+        watch.compact_keyword = compact_keyword
+        watch.is_active = True
+    db.flush()
+    return watch
+
+
+def list_active_watchlist_keywords(db: Session, chat_id: str | None = None) -> list[WatchlistKeyword]:
+    statement = select(WatchlistKeyword).where(WatchlistKeyword.is_active.is_(True))
+    if chat_id is not None:
+        statement = statement.where(WatchlistKeyword.chat_id == chat_id)
+    return list(db.scalars(statement.order_by(WatchlistKeyword.keyword.asc())))
+
+
+def deactivate_watchlist_keyword(db: Session, chat_id: str, normalized_keyword: str) -> bool:
+    watch = db.scalar(
+        select(WatchlistKeyword).where(
+            WatchlistKeyword.chat_id == chat_id,
+            WatchlistKeyword.normalized_keyword == normalized_keyword,
+            WatchlistKeyword.is_active.is_(True),
+        )
+    )
+    if watch is None:
+        return False
+    watch.is_active = False
+    db.flush()
+    return True

@@ -3,7 +3,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
-from app.models import Alert, Artist, Event, Source, TelegramSubscriber, Venue  # noqa: F401
+from app.models import Alert, Artist, Event, Source, TelegramSubscriber, Venue, WatchlistKeyword  # noqa: F401
 
 
 @pytest.fixture()

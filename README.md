@@ -35,8 +35,10 @@ Edit `.env` if you want Telegram alerts or scheduler support.
 | `TELEGRAM_CHAT_IDS` | empty | Comma-separated Telegram chat IDs for multiple private users. |
 | `TELEGRAM_WEBHOOK_SECRET` | empty | Optional secret token checked on Telegram webhook requests. |
 | `SCRAPE_INTERVAL_HOURS` | `6` | Minimum enforced value is 1 hour. |
+| `REMINDER_INTERVAL_MINUTES` | `30` | How often to check the database for watchlist sale reminders. Does not scrape source sites. |
 | `ENABLE_SCHEDULER` | `false` | Set to `true` to start periodic checks with the API process. |
 | `SEND_ALERTS_ON_FIRST_RUN` | `false` | Seeds the initial event database without alerting old/current concerts. Set `true` only for testing. |
+| `SALE_REMINDER_HOURS` | `24,1` | Comma-separated watchlist-only sale reminder windows. |
 | `LIVENATION_SG_EVENTS_URL` | filtered Live Nation SG all-events URL | Source URL used by the Live Nation SG scraper. |
 
 ## Telegram private chats
@@ -70,6 +72,17 @@ The app also includes `POST /telegram/webhook`. When Telegram sends updates to t
 - chat type
 
 After that, future alerts are sent to stored active subscribers plus any chat IDs configured in `.env`.
+
+Supported Telegram commands:
+
+- `/start` subscribes the chat.
+- `/upcoming` shows the next 5 upcoming concerts.
+- `/latest` shows the 5 newest concerts discovered by the app.
+- `/watch artist` watches an artist or event keyword.
+- `/watchlist` shows watched keywords.
+- `/unwatch artist` removes a watched keyword.
+- `/stop` unsubscribes the chat.
+- `/help` lists commands.
 
 For local development, Telegram cannot call `http://127.0.0.1:8000` directly. To test the webhook locally, use a public HTTPS tunnel such as ngrok, then set the webhook with:
 

@@ -97,3 +97,19 @@ class TelegramSubscriber(Base):
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+
+class WatchlistKeyword(Base):
+    __tablename__ = "watchlist_keywords"
+    __table_args__ = (
+        UniqueConstraint("chat_id", "normalized_keyword", name="uq_watchlist_chat_keyword"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    chat_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    keyword: Mapped[str] = mapped_column(String(255), nullable=False)
+    normalized_keyword: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    compact_keyword: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    is_active: Mapped[bool] = mapped_column(default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)

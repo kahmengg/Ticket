@@ -84,7 +84,9 @@ TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 TELEGRAM_WEBHOOK_SECRET=make_a_long_random_secret
 ENABLE_SCHEDULER=true
 SCRAPE_INTERVAL_HOURS=6
+REMINDER_INTERVAL_MINUTES=30
 SEND_ALERTS_ON_FIRST_RUN=false
+SALE_REMINDER_HOURS=24,1
 ```
 
 Do not set `TELEGRAM_CHAT_ID` in production unless you want to force alerts to a fixed chat. Production users should subscribe through `/start` after the webhook is connected.
@@ -113,6 +115,17 @@ Then open your Telegram bot and send:
 ```
 
 The app should save your chat and reply with a subscription confirmation.
+
+Available Telegram commands after the webhook is connected:
+
+- `/start` subscribes the chat.
+- `/upcoming` shows the next 5 upcoming concerts.
+- `/latest` shows the 5 newest concerts discovered by the app.
+- `/watch artist` watches an artist or event keyword.
+- `/watchlist` shows watched keywords.
+- `/unwatch artist` removes a watched keyword.
+- `/stop` unsubscribes the chat.
+- `/help` lists commands.
 
 ## First Production Check
 
