@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: ticket-sale-assistant
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_WEBHOOK_SECRET
+        generateValue: true
+      - key: ENABLE_SCHEDULER
+        value: true
+      - key: SCRAPE_INTERVAL_HOURS
+        value: 6
+      - key: SEND_ALERTS_ON_FIRST_RUN
+        value: false
+      - key: LIVENATION_SG_EVENTS_URL
+        value: https://www.livenation.sg/event/allevents?CountryIds=199&Genres=alternative-and-indie%2Ccountry%2Chip-hop-and-rap%2Cpop%2Crnb-and-soul%2Crock
