@@ -133,6 +133,7 @@ pytest
 | `TELEGRAM_CHAT_ID` | empty | Optional single fixed chat ID for local testing. |
 | `TELEGRAM_CHAT_IDS` | empty | Optional comma-separated fixed chat IDs. |
 | `TELEGRAM_WEBHOOK_SECRET` | empty | Optional secret checked on Telegram webhook requests. |
+| `RUN_CHECK_SECRET` | empty | Required bearer token for the scheduled `/run-check` endpoint. |
 | `SCRAPE_INTERVAL_HOURS` | `6` | How often to fetch source event data. Minimum is 1 hour. |
 | `REMINDER_INTERVAL_MINUTES` | `30` | How often to check the database for watchlist sale reminders. Does not scrape source sites. |
 | `ENABLE_SCHEDULER` | `false` | Set to `true` in production. |
@@ -145,7 +146,7 @@ pytest
 - `GET /health` returns API status.
 - `GET /events` returns all stored events, newest first.
 - `GET /events/upcoming` returns upcoming events.
-- `POST /run-check` manually runs the Live Nation SG check.
+- `POST /run-check` runs the Live Nation SG check with `Authorization: Bearer <RUN_CHECK_SECRET>`.
 - `POST /telegram/test-message` sends a Telegram test message.
 - `POST /telegram/webhook` receives Telegram updates and handles bot commands.
 
@@ -167,6 +168,28 @@ $env:PUBLIC_BASE_URL="https://your-render-url.onrender.com"
 ```
 
 For local development, Telegram cannot call `http://127.0.0.1:8000` directly unless you use a public tunnel such as ngrok.
+
+## Scheduled Production Checks
+
+The GitHub Actions workflow in `.github/workflows/scheduled-ticket-check.yml` calls the secured
+`/run-check` endpoint every six hours. This wakes a sleeping Render service, runs the scraper,
+and generates genuine Supabase database activity.
+
+Configure these values before enabling the workflow:
+
+1. In Render, add `RUN_CHECK_SECRET` with a long random value.
+2. In GitHub, open **Settings > Secrets and variables > Actions**.
+3. Add the repository variable `TICKET_CHECK_URL` with the Render service URL, for example
+   `https://ticket-sale-assistant.onrender.com`.
+4. Add the repository secret `RUN_CHECK_SECRET` with exactly the same value used in Render.
+5. Redeploy Render, then run **Scheduled ticket check** manually once from the GitHub Actions page.
+
+The endpoint fails closed with HTTP 503 when `RUN_CHECK_SECRET` is not configured and rejects
+incorrect credentials with HTTP 401.
+
+GitHub automatically disables scheduled workflows in public repositories after 60 days without
+repository activity. Make a repository update within that period or move this schedule to a
+dedicated cron provider for unattended long-term operation.
 
 ## Deployment
 

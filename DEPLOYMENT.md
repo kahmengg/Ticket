@@ -82,6 +82,7 @@ PYTHON_VERSION=3.12.13
 DATABASE_URL=your_supabase_postgres_connection_string
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 TELEGRAM_WEBHOOK_SECRET=make_a_long_random_secret
+RUN_CHECK_SECRET=make_a_different_long_random_secret
 ENABLE_SCHEDULER=true
 SCRAPE_INTERVAL_HOURS=6
 REMINDER_INTERVAL_MINUTES=30
@@ -90,6 +91,31 @@ SALE_REMINDER_HOURS=24,1
 ```
 
 Do not set `TELEGRAM_CHAT_ID` in production unless you want to force alerts to a fixed chat. Production users should subscribe through `/start` after the webhook is connected.
+
+## External Schedule
+
+Free Render web services sleep when idle, so APScheduler cannot guarantee six-hour checks by
+itself. The included GitHub Actions workflow calls the app every six hours as a reliable trigger.
+APScheduler remains enabled as a best-effort fallback while the web service is awake.
+
+In GitHub under **Settings > Secrets and variables > Actions**, configure:
+
+```text
+Repository variable:
+TICKET_CHECK_URL=https://your-render-url.onrender.com
+
+Repository secret:
+RUN_CHECK_SECRET=same_value_as_render
+```
+
+After the Render service is redeployed, open GitHub Actions and manually run **Scheduled ticket
+check** once. A successful run returns the `/run-check` JSON response. The recurring request wakes
+Render and performs real Supabase database work, which also helps prevent Free Plan inactivity
+pausing.
+
+Scheduled workflows in public GitHub repositories are disabled after 60 days without repository
+activity. For a permanently unattended setup, use a paid always-on service or a dedicated
+external cron provider.
 
 ## Telegram Webhook Setup
 
@@ -139,6 +165,7 @@ run:
 
 ```text
 POST /run-check
+Authorization: Bearer your_RUN_CHECK_SECRET
 ```
 
 Expected first production result:

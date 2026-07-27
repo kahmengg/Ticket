@@ -1,3 +1,4 @@
+import hmac
 from datetime import datetime, timezone
 
 import requests
@@ -31,7 +32,11 @@ def get_upcoming_events(db: Session = Depends(get_db)) -> list:
 
 
 @router.post("/run-check", response_model=RunCheckRead)
-def run_check(db: Session = Depends(get_db)) -> RunCheckRead:
+def run_check(
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(default=None),
+) -> RunCheckRead:
+    _require_run_check_authorization(authorization, settings.run_check_secret)
     try:
         result = run_livenation_check(db)
     except requests.RequestException as exc:
@@ -45,6 +50,19 @@ def run_check(db: Session = Depends(get_db)) -> RunCheckRead:
         unchanged_events=len(result.unchanged_events),
         notifications_sent=result.notifications_sent,
     )
+
+
+def _require_run_check_authorization(authorization: str | None, configured_secret: str | None) -> None:
+    if not configured_secret:
+        raise HTTPException(status_code=503, detail="Scheduled ticket checks are not configured.")
+
+    scheme, separator, provided_secret = (authorization or "").partition(" ")
+    if separator != " " or scheme.lower() != "bearer" or not hmac.compare_digest(provided_secret, configured_secret):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid run-check credentials.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 @router.post("/telegram/test-message", response_model=TelegramTestRead)

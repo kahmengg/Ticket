@@ -38,6 +38,7 @@ class Settings:
     telegram_chat_id: str | None = os.getenv("TELEGRAM_CHAT_ID")
     telegram_chat_ids: list[str] = field(default_factory=list)
     telegram_webhook_secret: str | None = os.getenv("TELEGRAM_WEBHOOK_SECRET")
+    run_check_secret: str | None = os.getenv("RUN_CHECK_SECRET")
     scrape_interval_hours: int = max(1, int(os.getenv("SCRAPE_INTERVAL_HOURS", "6")))
     reminder_interval_minutes: int = max(5, int(os.getenv("REMINDER_INTERVAL_MINUTES", "30")))
     enable_scheduler: bool = _bool_from_env(os.getenv("ENABLE_SCHEDULER"), False)

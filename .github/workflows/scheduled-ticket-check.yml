@@ -1,0 +1,29 @@
+name: Scheduled ticket check
+
+on:
+  schedule:
+    # Run away from the top of the hour, when scheduled Actions are busiest.
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: scheduled-ticket-check
+  cancel-in-progress: false
+
+jobs:
+  check-tickets:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger secured ticket check
+        env:
+          TICKET_CHECK_URL: ${{ vars.TICKET_CHECK_URL }}
+          RUN_CHECK_SECRET: ${{ secrets.RUN_CHECK_SECRET }}
+        run: |
+          test -n "$TICKET_CHECK_URL" || { echo "Missing repository variable: TICKET_CHECK_URL"; exit 1; }
+          test -n "$RUN_CHECK_SECRET" || { echo "Missing repository secret: RUN_CHECK_SECRET"; exit 1; }
+
+          # This wakes Render and performs a real Supabase query.
+          curl --fail-with-body --show-error --silent \
+            --retry 2 --retry-all-errors --max-time 180 \
+            --request POST "${TICKET_CHECK_URL%/}/run-check" \
+            --header "Authorization: Bearer $RUN_CHECK_SECRET"
