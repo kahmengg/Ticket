@@ -1,15 +1,12 @@
 services:
   - type: web
     name: ticket-sale-assistant
-    runtime: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    runtime: docker
+    dockerfilePath: ./Dockerfile
     healthCheckPath: /health
     envVars:
       - key: DATABASE_URL
         sync: false
-      - key: PYTHON_VERSION
-        value: 3.12.13
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: TELEGRAM_WEBHOOK_SECRET
@@ -17,6 +14,10 @@ services:
       - key: RUN_CHECK_SECRET
         sync: false
       - key: ENABLE_SCHEDULER
+        value: true
+      - key: ENABLE_LIVENATION
+        value: true
+      - key: ENABLE_TICKETMASTER
         value: true
       - key: SCRAPE_INTERVAL_HOURS
         value: 6

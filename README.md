@@ -124,6 +124,7 @@ http://127.0.0.1:8000/docs
 Run tests:
 
 ```powershell
+pip install -r requirements-test.txt
 pytest
 ```
 
