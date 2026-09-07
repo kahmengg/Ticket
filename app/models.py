@@ -34,6 +34,13 @@ class Source(Base):
     name: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     base_url: Mapped[str] = mapped_column(String(500), nullable=False)
     source_type: Mapped[str] = mapped_column(String(100), nullable=False, default="official")
+    baseline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_check_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_status: Mapped[str] = mapped_column(String(20), default="never", server_default="never")
+    last_error: Mapped[str | None] = mapped_column(Text)
+    last_event_count: Mapped[int] = mapped_column(default=0, server_default="0")
+    last_warnings: Mapped[list] = mapped_column(JSON, default=list, server_default="[]")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
     events: Mapped[list["Event"]] = relationship(back_populates="source")

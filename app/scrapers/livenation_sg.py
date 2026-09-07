@@ -42,6 +42,9 @@ class LiveNationSGScraper(BaseScraper):
         page_size = self._page_size_from_events_url()
 
         while True:
+            # Bound requests if a provider repeats pages or reports an invalid total.
+            if page > 10:
+                raise ValueError("Live Nation pagination exceeded the safe limit")
             response = requests.get(
                 self.api_url,
                 params=[*self._api_params_from_events_url(), ("Page", str(page))],

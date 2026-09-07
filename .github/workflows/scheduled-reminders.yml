@@ -1,0 +1,29 @@
+name: Scheduled sale reminders
+
+on:
+  schedule:
+    - cron: "7,37 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scheduled-sale-reminders
+  cancel-in-progress: false
+
+jobs:
+  reminders:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check stored sale reminders and pending deliveries
+        env:
+          TICKET_CHECK_URL: ${{ vars.TICKET_CHECK_URL }}
+          RUN_CHECK_SECRET: ${{ secrets.RUN_CHECK_SECRET }}
+        run: |
+          test -n "$TICKET_CHECK_URL" || { echo "Missing TICKET_CHECK_URL"; exit 1; }
+          test -n "$RUN_CHECK_SECRET" || { echo "Missing RUN_CHECK_SECRET"; exit 1; }
+          curl --fail-with-body --show-error --silent --max-time 480 \
+            --request POST "${TICKET_CHECK_URL%/}/run-reminders" \
+            --header "Authorization: Bearer $RUN_CHECK_SECRET"

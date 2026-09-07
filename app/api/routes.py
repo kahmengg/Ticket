@@ -1,15 +1,16 @@
 import hmac
 from datetime import datetime, timezone
 
-import requests
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Response
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import crud
 from app.config import settings
 from app.database import get_db
-from app.schemas import EventRead, HealthRead, RunCheckRead, TelegramTestRead
-from app.scheduler import run_livenation_check
+from app.schemas import EventRead, HealthRead, RunCheckRead, RunRemindersRead, SourceStatusRead, TelegramTestRead
+from app.scheduler import run_event_check, run_sale_reminder_check
+from app.models import Source
 from app.services.notifications import get_notification_chat_ids, send_telegram_message, send_telegram_message_to_chat
 from app.services.telegram_commands import handle_telegram_command
 from app.services.job_lock import CheckAlreadyRunning
@@ -34,25 +35,39 @@ def get_upcoming_events(db: Session = Depends(get_db)) -> list:
 
 @router.post("/run-check", response_model=RunCheckRead)
 def run_check(
+    response: Response,
     db: Session = Depends(get_db),
     authorization: str | None = Header(default=None),
 ) -> RunCheckRead:
     _require_run_check_authorization(authorization, settings.run_check_secret)
     try:
-        result = run_livenation_check(db)
+        result = run_event_check(db)
     except CheckAlreadyRunning as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    except requests.RequestException as exc:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Live Nation SG fetch failed: {exc}",
-        ) from exc
+    if not result.source_results:
+        response.status_code = 503
+    elif all(source["status"] == "failed" for source in result.source_results):
+        response.status_code = 502
     return RunCheckRead(
         new_events=len(result.new_events),
         updated_events=len(result.updated_events),
         unchanged_events=len(result.unchanged_events),
         notifications_sent=result.notifications_sent,
+        sources=result.source_results,
     )
+
+
+@router.post("/run-reminders", response_model=RunRemindersRead)
+def run_reminders(db: Session = Depends(get_db), authorization: str | None = Header(default=None)) -> RunRemindersRead:
+    # External wake-ups check only stored events; they never scrape more frequently.
+    _require_run_check_authorization(authorization, settings.run_check_secret)
+    return RunRemindersRead(notifications_sent=run_sale_reminder_check(db))
+
+
+@router.get("/sources/status", response_model=list[SourceStatusRead])
+def source_status(db: Session = Depends(get_db), authorization: str | None = Header(default=None)) -> list:
+    _require_run_check_authorization(authorization, settings.run_check_secret)
+    return list(db.scalars(select(Source).order_by(Source.name)))
 
 
 def _require_run_check_authorization(authorization: str | None, configured_secret: str | None) -> None:

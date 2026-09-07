@@ -18,6 +18,7 @@ class DetectionResult:
     updated_events: list[Event] = field(default_factory=list)
     unchanged_events: list[Event] = field(default_factory=list)
     notifications_sent: int = 0
+    source_results: list[dict] = field(default_factory=list)
 
 
 def generate_content_hash(event: ScrapedEvent | dict) -> str:

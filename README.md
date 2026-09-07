@@ -6,7 +6,7 @@ The project is intentionally safe and conservative. It does **not** automate tic
 
 ## Features
 
-- Monitors Live Nation Singapore event data.
+- Monitors Live Nation Singapore and Ticketmaster Singapore public concert data.
 - Stores events, subscribers, watchlists, and alert history.
 - Detects new, updated, and unchanged concerts.
 - Sends Telegram alerts for new and changed concerts.
@@ -149,7 +149,7 @@ pytest
 - `GET /health` returns API status.
 - `GET /events` returns all stored events, newest first.
 - `GET /events/upcoming` returns upcoming events.
-- `POST /run-check` runs the Live Nation SG check with `Authorization: Bearer <RUN_CHECK_SECRET>`.
+- `POST /run-check` runs all enabled source checks with `Authorization: Bearer <RUN_CHECK_SECRET>`.
 - `POST /telegram/test-message` sends a Telegram test message with `Authorization: Bearer <RUN_CHECK_SECRET>`. Returns `configured_chat_count` and `sent`, without exposing chat IDs.
 - `POST /telegram/webhook` receives Telegram updates and handles bot commands. Requires `X-Telegram-Bot-Api-Secret-Token` matching `TELEGRAM_WEBHOOK_SECRET`; missing configuration returns HTTP 503 and invalid credentials return HTTP 403.
 
@@ -201,7 +201,7 @@ Recommended production setup:
 - Render Web Service for the FastAPI app.
 - Supabase Postgres for the database.
 
-See [DEPLOYMENT.md](./DEPLOYMENT.md) for full deployment steps.
+See [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) for full deployment steps.
 
 ## Database Migrations
 
@@ -219,7 +219,7 @@ See [MIGRATIONS.md](./MIGRATIONS.md) for the full workflow.
 
 ## Docker
 
-Docker is available but not required for the recommended Render Python runtime deployment.
+Use Docker in production to install Chromium and its system libraries together.
 
 ```powershell
 docker build -t ticket-sale-assistant .
@@ -247,11 +247,9 @@ Each event update has a revision, so subsequent changes (including presale chang
 
 Source checks are serialized with a Postgres advisory lock or an OS file lock beside the local SQLite database. Overlapping `/run-check` calls return HTTP 409. Startup applies Alembic migrations; revision `20260907_0002` preserves existing sent alerts and adds delivery tracking. Back up the database before deploying schema changes. Telegram displays Singapore time while calendar links retain UTC timestamps.
 
-If the hosting service is asleep, in-process reminders and retries cannot run. The six-hour GitHub trigger alone does not guarantee one-hour sale reminders.
+The separate half-hour GitHub reminder workflow wakes the service through `/run-reminders` without scraping. Schedule delays and hosting outages can still delay reminders.
 
-## Future Improvements
-
-### Source-aware storage
+## Multi-source data
 
 Each event represents one performance. Its `listings` retain each provider's stable ID, URL, last-known fields, named sale windows, and observation time. The event API includes these listings and `field_provenance`, mapping canonical fields to listing IDs. Existing `url` and `source_id` fields continue to identify the primary listing. Full Telegram messages include additional provider links; compact commands retain the primary link.
 
@@ -269,3 +267,11 @@ Migration `20260907_0003` preserves event IDs and alert history, backfills sourc
 - Add a small admin dashboard.
 - Add richer user preferences.
 - Add better production observability and alert failure reporting.
+
+## Source operations
+
+`ENABLE_LIVENATION` and `ENABLE_TICKETMASTER` default to true. Each source seeds its first successful run silently. Partial failures remain visible and do not complete the baseline.
+
+`GET /sources/status` reports source health; `POST /run-reminders` checks stored reminders and retries deliveries. Both require the `RUN_CHECK_SECRET` bearer token.
+
+Run `python scripts/preview_sources.py --source both` for an isolated preview saved to `.scratch/preview.json`, without configured database writes or Telegram messages.

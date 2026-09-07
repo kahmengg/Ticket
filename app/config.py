@@ -42,6 +42,8 @@ class Settings:
     scrape_interval_hours: int = max(1, int(os.getenv("SCRAPE_INTERVAL_HOURS", "6")))
     reminder_interval_minutes: int = max(5, int(os.getenv("REMINDER_INTERVAL_MINUTES", "30")))
     enable_scheduler: bool = _bool_from_env(os.getenv("ENABLE_SCHEDULER"), False)
+    enable_livenation: bool = _bool_from_env(os.getenv("ENABLE_LIVENATION"), True)
+    enable_ticketmaster: bool = _bool_from_env(os.getenv("ENABLE_TICKETMASTER"), True)
     send_alerts_on_first_run: bool = _bool_from_env(os.getenv("SEND_ALERTS_ON_FIRST_RUN"), False)
     sale_reminder_hours: list[int] = field(default_factory=list)
     livenation_sg_events_url: str = os.getenv(

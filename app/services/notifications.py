@@ -59,7 +59,7 @@ def send_sale_reminder_alerts(matches: list[WatchMatch], reminder_hours: int, db
         if crud.telegram_subscription_state(db, match.chat_id) is not True:
             continue
         event = match.event
-        if event.id is None or event.sale_date is None:
+        if event.id is None or event.sale_date is None or event.status in {"cancelled", "postponed"}:
             continue
         sale_date = _utc(event.sale_date)
         key = f"sale_reminder_{reminder_hours}h:{sale_date.isoformat()}"
@@ -107,6 +107,7 @@ def deliver_pending_alerts(db: Session, now=None, limit: int = 100) -> int:
         if alert.sale_date is not None:
             # Recheck expiry, rescheduling and /unwatch after a failed or delayed send.
             cancelled = cancelled or active is not True or event.sale_date is None
+            cancelled = cancelled or event.status in {"cancelled", "postponed"}
             cancelled = cancelled or _utc(alert.sale_date) <= delivery_time
             cancelled = cancelled or (event.sale_date is not None and _utc(event.sale_date) != _utc(alert.sale_date))
             cancelled = cancelled or not any(
@@ -183,6 +184,10 @@ def format_event_message(event: Event, alert_type: str = "new_event") -> str:
         lines.append(f"Sale date: {_format_datetime(event.sale_date)}")
     if event.presale_date:
         lines.append(f"Presale date: {_format_datetime(event.presale_date)}")
+    if event.price_summary:
+        lines.append(f"Prices: {event.price_summary}")
+    if event.status in {"cancelled", "postponed", "sold_out", "unavailable"}:
+        lines.append(f"Status: {event.status.replace(chr(95), chr(32))}")
     lines.append(f"URL: {event.url}")
     lines.extend(_additional_source_links(event))
     concert_calendar_url = _google_calendar_url(
@@ -219,6 +224,10 @@ def format_sale_reminder_message(event: Event, keyword: str, reminder_hours: int
         lines.append(f"Sale date: {_format_datetime(event.sale_date)}")
     if event.event_date:
         lines.append(f"Event date: {_format_datetime(event.event_date)}")
+    if event.price_summary:
+        lines.append(f"Prices: {event.price_summary}")
+    if event.status in {"cancelled", "postponed", "sold_out", "unavailable"}:
+        lines.append(f"Status: {event.status.replace(chr(95), chr(32))}")
     lines.append(f"URL: {event.url}")
     lines.extend(_additional_source_links(event))
     sale_calendar_url = _google_calendar_url(

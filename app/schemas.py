@@ -62,10 +62,36 @@ class HealthRead(BaseModel):
     status: str
 
 
+class SourceCheckRead(BaseModel):
+    name: str
+    status: str
+    events: int
+    seeded: bool
+    error: str | None = None
+    warnings: list[str] = Field(default_factory=list)
+
+
+class SourceStatusRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    name: str
+    baseline_at: datetime | None
+    last_check_at: datetime | None
+    last_success_at: datetime | None
+    last_status: str
+    last_error: str | None
+    last_event_count: int
+    last_warnings: list[str]
+
+
 class RunCheckRead(BaseModel):
     new_events: int
     updated_events: int
     unchanged_events: int
+    notifications_sent: int
+    sources: list[SourceCheckRead] = Field(default_factory=list)
+
+
+class RunRemindersRead(BaseModel):
     notifications_sent: int
 
 

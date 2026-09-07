@@ -18,6 +18,11 @@ def normalized(value: str | None) -> str:
     return " ".join(re.findall(r"\w+", unicodedata.normalize("NFKC", value or "").casefold()))
 
 
+def normalized_venue(value: str | None) -> str:
+    # Country suffixes differ across providers; preserve names beginning with Singapore.
+    return re.sub(r" singapore$", "", normalized(value))
+
+
 def _compatible_title(left: str, right: str) -> bool:
     if normalized(left) == normalized(right):
         return True
@@ -37,7 +42,7 @@ def find_matching_event(db: Session, source_id: int, scraped: dict) -> Event | N
         # Distinct performance IDs from one provider are not automatically merged.
         if any(listing.source_id == source_id for listing in event.listings):
             continue
-        if normalized(event.venue_name) != normalized(scraped.get("venue_name")):
+        if normalized_venue(event.venue_name) != normalized_venue(scraped.get("venue_name")):
             continue
         if not _compatible_title(event.title, scraped["title"]):
             continue

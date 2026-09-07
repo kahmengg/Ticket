@@ -1,0 +1,43 @@
+name: Tests and container
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ticket_test
+        ports: ["5432:5432"]
+        options: --health-cmd pg_isready --health-interval 5s --health-retries 10
+    env:
+      DATABASE_URL: sqlite:///./ci.db
+      ENABLE_SCHEDULER: "false"
+      TEST_POSTGRES_URL: postgresql+psycopg://postgres:postgres@localhost:5432/ticket_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m pytest -q
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t ticket-assistant .
+      - name: Verify browser and application startup
+        run: |
+          docker run --rm ticket-assistant python -c 'from playwright.sync_api import sync_playwright; p=sync_playwright().start(); b=p.chromium.launch(channel="chromium"); b.close(); p.stop()'
+          docker run -d --name ticket -p 8000:8000 -e ENABLE_SCHEDULER=false ticket-assistant
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://localhost:8000/health; then exit 0; fi
+            sleep 2
+          done
+          docker logs ticket
+          exit 1

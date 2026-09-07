@@ -85,7 +85,7 @@ def sale_reminder_matches(db: Session, reminder_hours: int, now: datetime | None
     matches: list[WatchMatch] = []
     for event in crud.list_events(db):
         sale_date = event.sale_date
-        if sale_date is None:
+        if sale_date is None or event.status in {"cancelled", "postponed"}:
             continue
         if sale_date.tzinfo is None:
             sale_date = sale_date.replace(tzinfo=timezone.utc)

@@ -52,6 +52,7 @@ def list_upcoming_events(db: Session, now: datetime) -> list[Event]:
         db.scalars(
             select(Event)
             .where(or_(Event.event_date >= now, Event.sale_date >= now))
+            .where(or_(Event.status.is_(None), Event.status.not_in(["cancelled", "postponed"])))
             .order_by(Event.event_date.asc().nulls_last(), Event.sale_date.asc().nulls_last())
         )
     )
@@ -62,6 +63,7 @@ def list_upcoming_events_limited(db: Session, now: datetime, limit: int = 5) -> 
         db.scalars(
             select(Event)
             .where(or_(Event.event_date >= now, Event.sale_date >= now))
+            .where(or_(Event.status.is_(None), Event.status.not_in(["cancelled", "postponed"])))
             .order_by(Event.event_date.asc().nulls_last(), Event.sale_date.asc().nulls_last())
             .limit(limit)
         )
