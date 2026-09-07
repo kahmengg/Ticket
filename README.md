@@ -132,7 +132,7 @@ pytest
 | `TELEGRAM_BOT_TOKEN` | empty | Telegram bot token. |
 | `TELEGRAM_CHAT_ID` | empty | Optional single fixed chat ID for local testing. |
 | `TELEGRAM_CHAT_IDS` | empty | Optional comma-separated fixed chat IDs. |
-| `TELEGRAM_WEBHOOK_SECRET` | empty | Optional secret checked on Telegram webhook requests. |
+| `TELEGRAM_WEBHOOK_SECRET` | empty | Required for webhook requests; missing configuration returns HTTP 503. |
 | `RUN_CHECK_SECRET` | empty | Required bearer token for the scheduled `/run-check` endpoint. |
 | `SCRAPE_INTERVAL_HOURS` | `6` | How often to fetch source event data. Minimum is 1 hour. |
 | `REMINDER_INTERVAL_MINUTES` | `30` | How often to check the database for watchlist sale reminders. Does not scrape source sites. |
@@ -147,8 +147,8 @@ pytest
 - `GET /events` returns all stored events, newest first.
 - `GET /events/upcoming` returns upcoming events.
 - `POST /run-check` runs the Live Nation SG check with `Authorization: Bearer <RUN_CHECK_SECRET>`.
-- `POST /telegram/test-message` sends a Telegram test message.
-- `POST /telegram/webhook` receives Telegram updates and handles bot commands.
+- `POST /telegram/test-message` sends a Telegram test message with `Authorization: Bearer <RUN_CHECK_SECRET>`. Returns `configured_chat_count` and `sent`, without exposing chat IDs.
+- `POST /telegram/webhook` receives Telegram updates and handles bot commands. Requires `X-Telegram-Bot-Api-Secret-Token` matching `TELEGRAM_WEBHOOK_SECRET`; missing configuration returns HTTP 503 and invalid credentials return HTTP 403.
 
 ## Telegram Webhook
 

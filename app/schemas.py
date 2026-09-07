@@ -38,5 +38,5 @@ class RunCheckRead(BaseModel):
 
 
 class TelegramTestRead(BaseModel):
-    configured_chat_ids: list[str]
+    configured_chat_count: int
     sent: int

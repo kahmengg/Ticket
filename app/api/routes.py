@@ -57,7 +57,9 @@ def _require_run_check_authorization(authorization: str | None, configured_secre
         raise HTTPException(status_code=503, detail="Scheduled ticket checks are not configured.")
 
     scheme, separator, provided_secret = (authorization or "").partition(" ")
-    if separator != " " or scheme.lower() != "bearer" or not hmac.compare_digest(provided_secret, configured_secret):
+    if separator != " " or scheme.lower() != "bearer" or not hmac.compare_digest(
+        provided_secret.encode("utf-8"), configured_secret.encode("utf-8")
+    ):
         raise HTTPException(
             status_code=401,
             detail="Invalid run-check credentials.",
@@ -66,13 +68,18 @@ def _require_run_check_authorization(authorization: str | None, configured_secre
 
 
 @router.post("/telegram/test-message", response_model=TelegramTestRead)
-def telegram_test_message(db: Session = Depends(get_db)) -> TelegramTestRead:
+def telegram_test_message(
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(default=None),
+) -> TelegramTestRead:
+    # Authenticate before looking up recipients or sending a broadcast.
+    _require_run_check_authorization(authorization, settings.run_check_secret)
     chat_ids = get_notification_chat_ids(db)
     sent = send_telegram_message(
         "Ticket Sale Assistant test message. If you can see this, Telegram alerts are configured correctly.",
         chat_ids=chat_ids,
     )
-    return TelegramTestRead(configured_chat_ids=chat_ids, sent=sent)
+    return TelegramTestRead(configured_chat_count=len(chat_ids), sent=sent)
 
 
 @router.post("/telegram/webhook")
@@ -81,7 +88,13 @@ def telegram_webhook(
     db: Session = Depends(get_db),
     x_telegram_bot_api_secret_token: str | None = Header(default=None),
 ) -> dict:
-    if settings.telegram_webhook_secret and x_telegram_bot_api_secret_token != settings.telegram_webhook_secret:
+    # Missing configuration must never turn the public webhook into an open endpoint.
+    if not settings.telegram_webhook_secret:
+        raise HTTPException(status_code=503, detail="Telegram webhook is not configured.")
+    if not hmac.compare_digest(
+        (x_telegram_bot_api_secret_token or "").encode("utf-8"),
+        settings.telegram_webhook_secret.encode("utf-8"),
+    ):
         raise HTTPException(status_code=403, detail="Invalid Telegram webhook secret.")
 
     message = update.get("message") or update.get("edited_message")
