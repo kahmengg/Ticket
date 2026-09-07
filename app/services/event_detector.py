@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 import hashlib
 import json
 
@@ -21,6 +21,8 @@ class DetectionResult:
 def generate_content_hash(event: ScrapedEvent | dict) -> str:
     payload = {
         "title": _normalize(event.get("title")),
+        "artist_name": _normalize(event.get("artist_name")),
+        "presale_date": _normalize_datetime(event.get("presale_date")),
         "venue_name": _normalize(event.get("venue_name")),
         "event_date": _normalize_datetime(event.get("event_date")),
         "sale_date": _normalize_datetime(event.get("sale_date")),
@@ -30,10 +32,16 @@ def generate_content_hash(event: ScrapedEvent | dict) -> str:
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
-def process_events(db: Session, events: list[ScrapedEvent]) -> DetectionResult:
+def process_events(db: Session, events: list[ScrapedEvent], *, commit: bool = True) -> DetectionResult:
     result = DetectionResult()
 
     for scraped in events:
+        # SQLite drops offsets, so normalize before persistence as well as before hashing.
+        scraped = dict(scraped)
+        for key in ("event_date", "sale_date", "presale_date"):
+            value = scraped.get(key)
+            if value is not None:
+                scraped[key] = value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
         source = crud.get_or_create_source(
             db,
             name=scraped["source_name"],
@@ -67,7 +75,12 @@ def process_events(db: Session, events: list[ScrapedEvent]) -> DetectionResult:
             continue
 
         existing.last_seen_at = utc_now()
-        if existing.content_hash != content_hash:
+        # Compare stored values so changing the hash algorithm does not announce every event.
+        stored_hash = generate_content_hash({key: getattr(existing, key) for key in (
+            "title", "artist_name", "venue_name", "event_date", "sale_date", "presale_date", "url",
+        )})
+        if stored_hash != content_hash:
+            existing.revision += 1
             existing.source_id = source.id
             existing.title = scraped["title"]
             existing.artist_name = scraped.get("artist_name")
@@ -79,9 +92,12 @@ def process_events(db: Session, events: list[ScrapedEvent]) -> DetectionResult:
             existing.content_hash = content_hash
             result.updated_events.append(existing)
         else:
+            existing.content_hash = content_hash
             result.unchanged_events.append(existing)
 
-    db.commit()
+    db.flush()
+    if commit:
+        db.commit()
     return result
 
 
@@ -95,7 +111,9 @@ def _normalize_datetime(value: object) -> str | None:
     if value is None:
         return None
     if isinstance(value, datetime):
-        return value.isoformat()
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc).isoformat()
     return _normalize(value)
 
 

@@ -12,6 +12,7 @@ from app.schemas import EventRead, HealthRead, RunCheckRead, TelegramTestRead
 from app.scheduler import run_livenation_check
 from app.services.notifications import get_notification_chat_ids, send_telegram_message, send_telegram_message_to_chat
 from app.services.telegram_commands import handle_telegram_command
+from app.services.job_lock import CheckAlreadyRunning
 
 router = APIRouter()
 
@@ -39,6 +40,8 @@ def run_check(
     _require_run_check_authorization(authorization, settings.run_check_secret)
     try:
         result = run_livenation_check(db)
+    except CheckAlreadyRunning as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except requests.RequestException as exc:
         raise HTTPException(
             status_code=502,

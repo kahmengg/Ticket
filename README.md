@@ -54,8 +54,8 @@ Full event alerts include:
 ```text
 BABYMONSTER WORLD TOUR [춤 (CHOOM)] IN SINGAPORE
 Venue: Singapore Indoor Stadium
-Event date: 2026-11-28T10:00:00
-Sale date: 2026-06-11T04:00:00
+Event date: 28 Nov 2026, 06:00 PM SGT
+Sale date: 11 Jun 2026, 12:00 PM SGT
 URL: https://www.livenation.sg/...
 Add concert to calendar: https://calendar.google.com/...
 Add ticket sale to calendar: https://calendar.google.com/...
@@ -237,6 +237,16 @@ It does not:
 - bypass CAPTCHA
 - automate checkout
 - scrape aggressively
+
+## Notification Reliability
+
+Event changes and pending alerts are saved together. Scheduled event and reminder checks retry pending alerts in batches of 100, with exponential backoff capped at one hour. The actual retry time depends on when the next check runs (normally the 30-minute reminder interval). Delivery leases expire after five minutes so interrupted sends can recover. A crash after Telegram accepts a message but before the database records success can still cause a duplicate on retry.
+
+Each event update has a revision, so subsequent changes (including presale changes) can notify again. Sale reminders are keyed by the sale timestamp. Expired, rescheduled, unsubscribed, and unwatched reminders are cancelled before delivery. `/stop` also cancels already queued messages.
+
+Source checks are serialized with a Postgres advisory lock or an OS file lock beside the local SQLite database. Overlapping `/run-check` calls return HTTP 409. Startup applies Alembic migrations; revision `20260907_0002` preserves existing sent alerts and adds delivery tracking. Back up the database before deploying schema changes. Telegram displays Singapore time while calendar links retain UTC timestamps.
+
+If the hosting service is asleep, in-process reminders and retries cannot run. The six-hour GitHub trigger alone does not guarantee one-hour sale reminders.
 
 ## Future Improvements
 

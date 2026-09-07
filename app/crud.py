@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.models import Alert, Event, Source, TelegramSubscriber, WatchlistKeyword, utc_now
@@ -150,6 +150,10 @@ def deactivate_telegram_subscriber(db: Session, chat_id: str) -> bool:
         return False
 
     subscriber.is_active = False
+    # A later /start must not revive messages queued before the unsubscribe.
+    db.execute(update(Alert).where(
+        Alert.chat_id == chat_id, Alert.delivery_state.in_(["pending", "sending"]),
+    ).values(delivery_state="cancelled", lease_token=None, next_attempt_at=None))
     subscriber.last_seen_at = utc_now()
     db.flush()
     return True

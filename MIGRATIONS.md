@@ -33,7 +33,9 @@ It represents the current app schema:
 - telegram_subscribers
 - watchlist_keywords
 
-The app still calls `Base.metadata.create_all()` on startup. That keeps fresh deploys simple. After tables exist, startup creates/stamps the `alembic_version` table with the initial revision if needed.
+Startup now applies `alembic upgrade head`. Legacy databases without an Alembic version are stamped at the original baseline first. Fresh databases run all migrations. Docker includes the migration files.
+
+Revision `20260907_0002` adds event revisions and durable notification delivery fields. Existing alerts remain marked as sent; old sale reminders are associated with the currently stored sale date. No existing subscriber, event, or watchlist is deleted. Back up the database before deployment. Migration tests cover fresh and existing SQLite databases; the Postgres migration still needs staging verification before production rollout.
 
 That means your current production database can keep running, and future schema changes can use Alembic migrations.
 

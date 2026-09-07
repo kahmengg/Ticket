@@ -8,7 +8,8 @@ from app import crud
 from app.database import SessionLocal
 from app.scrapers.livenation_sg import LiveNationSGScraper
 from app.services.event_detector import DetectionResult, process_events
-from app.services.notifications import send_new_event_alerts, send_sale_reminder_alerts, send_updated_event_alerts
+from app.services.notifications import deliver_pending_alerts, queue_event_alerts, send_sale_reminder_alerts
+from app.services.job_lock import CheckAlreadyRunning, source_check_lock
 from app.services.watchlist import sale_reminder_matches
 
 logger = logging.getLogger(__name__)
@@ -18,17 +19,25 @@ def run_livenation_check(db: Session | None = None) -> DetectionResult:
     owns_session = db is None
     session = db or SessionLocal()
     try:
-        scraper = LiveNationSGScraper()
-        scraped_events = scraper.fetch_events()
-        is_first_run = crud.count_events(session) == 0
-        result = process_events(session, scraped_events)
+        with source_check_lock(session.get_bind()) as acquired:
+            if not acquired:
+                raise CheckAlreadyRunning("An event check is already running.")
+            scraped_events = LiveNationSGScraper().fetch_events()
+            is_first_run = crud.count_events(session) == 0
+            result = process_events(session, scraped_events, commit=False)
+            if not (is_first_run and not settings.send_alerts_on_first_run):
+                # Event changes and pending deliveries become durable in the same transaction.
+                queue_event_alerts(result.new_events, "new_event", session)
+                queue_event_alerts(result.updated_events, "event_updated", session)
+            session.commit()
+        result.notifications_sent = deliver_pending_alerts(session)
         if is_first_run and not settings.send_alerts_on_first_run:
-            logger.info("Seeded initial event baseline without sending alerts.")
             return result
-        result.notifications_sent = send_new_event_alerts(result.new_events, session)
-        result.notifications_sent += send_updated_event_alerts(result.updated_events, session)
         result.notifications_sent += run_sale_reminder_check(session)
         return result
+    except Exception:
+        session.rollback()
+        raise
     finally:
         if owns_session:
             session.close()
@@ -38,7 +47,7 @@ def run_sale_reminder_check(db: Session | None = None) -> int:
     owns_session = db is None
     session = db or SessionLocal()
     try:
-        sent_count = 0
+        sent_count = deliver_pending_alerts(session)
         for reminder_hours in settings.sale_reminder_hours:
             sent_count += send_sale_reminder_alerts(
                 sale_reminder_matches(session, reminder_hours),
