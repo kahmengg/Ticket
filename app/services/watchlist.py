@@ -74,7 +74,7 @@ def event_matches_keyword(event: Event, keyword: NormalizedKeyword | WatchlistKe
 def matched_watchlists_for_event(db: Session, event: Event) -> list[WatchMatch]:
     matches: list[WatchMatch] = []
     for watch in crud.list_active_watchlist_keywords(db):
-        if event_matches_keyword(event, watch):
+        if crud.telegram_subscription_state(db, watch.chat_id) is True and event_matches_keyword(event, watch):
             matches.append(WatchMatch(chat_id=watch.chat_id, keyword=watch.keyword, event=event))
     return matches
 

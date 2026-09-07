@@ -25,11 +25,14 @@ def test_upsert_telegram_subscriber_creates_and_updates(db_session):
 
     assert created.id == updated.id
     assert updated.username == "renamed_user"
+    assert crud.list_active_telegram_chat_ids(db_session) == []
+    handle_telegram_command("/start", "123", db_session)
     assert crud.list_active_telegram_chat_ids(db_session) == ["123"]
 
 
 def test_stop_command_deactivates_subscriber(db_session):
     crud.upsert_telegram_subscriber(db_session, chat_id="123", chat_type="private")
+    handle_telegram_command("/start", "123", db_session)
     db_session.commit()
 
     reply = handle_telegram_command("/stop", "123", db_session)

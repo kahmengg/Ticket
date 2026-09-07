@@ -58,6 +58,8 @@ def test_sale_reminder_matches_only_matching_watchlist(db_session):
     db_session.add(event)
     add_watch_keyword(db_session, "123", "baby monster")
     add_watch_keyword(db_session, "456", "coldplay")
+    crud.activate_telegram_subscriber(db_session, "123")
+    crud.activate_telegram_subscriber(db_session, "456")
     db_session.commit()
 
     matches = sale_reminder_matches(db_session, 1, now=now)

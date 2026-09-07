@@ -9,6 +9,7 @@ from app.services.watchlist import add_watch_keyword, matching_events_for_keywor
 
 
 HELP_MESSAGE = """Ticket Sale Assistant commands:
+/start - subscribe to alerts
 /upcoming - next upcoming concerts
 /latest - newest concerts found
 /watch artist - watch an artist or event keyword
@@ -23,6 +24,8 @@ def handle_telegram_command(text: str, chat_id: str, db: Session) -> str | None:
     if command == "/help":
         return HELP_MESSAGE
     if command == "/start":
+        crud.activate_telegram_subscriber(db, chat_id)
+        db.commit()
         return "You're subscribed to Ticket Sale Assistant alerts. I'll message this chat when new concerts are detected."
     if command == "/stop":
         crud.deactivate_telegram_subscriber(db, chat_id)
@@ -44,9 +47,12 @@ def handle_telegram_command(text: str, chat_id: str, db: Session) -> str | None:
             return str(exc)
         db.commit()
         matches = matching_events_for_keyword(db, watch.keyword, limit=3)
+        subscription_note = ""
+        if crud.telegram_subscription_state(db, chat_id) is not True:
+            subscription_note = "\nAlerts are paused. Send /start to receive notifications."
         if not matches:
-            return f"Watching: {watch.keyword}\nNo matching concerts found yet. I'll alert you when one appears."
-        return f"Watching: {watch.keyword}\n\n{_format_event_list('Matching concerts already found', matches)}"
+            return f"Watching: {watch.keyword}\nNo matching concerts found yet.{subscription_note}"
+        return f"Watching: {watch.keyword}{subscription_note}\n\n{_format_event_list('Matching concerts already found', matches)}"
     if command == "/watchlist":
         watches = crud.list_active_watchlist_keywords(db, chat_id=chat_id)
         if not watches:

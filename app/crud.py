@@ -106,7 +106,8 @@ def upsert_telegram_subscriber(
 ) -> TelegramSubscriber:
     subscriber = db.scalar(select(TelegramSubscriber).where(TelegramSubscriber.chat_id == chat_id))
     if subscriber is None:
-        subscriber = TelegramSubscriber(chat_id=chat_id)
+        # Receiving a message records the chat without opting it into alerts.
+        subscriber = TelegramSubscriber(chat_id=chat_id, is_active=False)
         db.add(subscriber)
 
     subscriber.from_id = from_id
@@ -114,10 +115,23 @@ def upsert_telegram_subscriber(
     subscriber.first_name = first_name
     subscriber.last_name = last_name
     subscriber.chat_type = chat_type
-    subscriber.is_active = True
     subscriber.last_seen_at = utc_now()
     db.flush()
     return subscriber
+
+
+def activate_telegram_subscriber(db: Session, chat_id: str) -> None:
+    subscriber = db.scalar(select(TelegramSubscriber).where(TelegramSubscriber.chat_id == chat_id))
+    if subscriber is None:
+        subscriber = TelegramSubscriber(chat_id=chat_id)
+        db.add(subscriber)
+    subscriber.is_active = True
+    db.flush()
+
+
+def telegram_subscription_state(db: Session, chat_id: str) -> bool | None:
+    # None distinguishes configured test recipients from chats that explicitly stopped.
+    return db.scalar(select(TelegramSubscriber.is_active).where(TelegramSubscriber.chat_id == chat_id))
 
 
 def list_active_telegram_chat_ids(db: Session) -> list[str]:

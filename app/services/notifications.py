@@ -24,6 +24,9 @@ def send_event_alerts(events: list[Event], alert_type: str, db: Session | None =
     for event in events:
         message = format_event_message(event, alert_type=alert_type)
         for chat_id in chat_ids:
+            # Recheck before delivery in case the chat stopped after recipient selection.
+            if db is not None and crud.telegram_subscription_state(db, chat_id) is False:
+                continue
             if db is not None and event.id is not None and crud.alert_exists(db, event.id, alert_type, chat_id):
                 continue
             if send_telegram_message_to_chat(chat_id, message):
@@ -51,6 +54,8 @@ def send_sale_reminder_alerts(matches: list[WatchMatch], reminder_hours: int, db
     sent_count = 0
     alert_type = f"sale_reminder_{reminder_hours}h"
     for match in matches:
+        if crud.telegram_subscription_state(db, match.chat_id) is not True:
+            continue
         event = match.event
         if event.id is None or crud.alert_exists(db, event.id, alert_type, match.chat_id):
             continue
@@ -87,6 +92,7 @@ def get_notification_chat_ids(db: Session | None = None) -> list[str]:
     chat_ids = list(settings.telegram_chat_ids)
     if db is not None:
         chat_ids.extend(crud.list_active_telegram_chat_ids(db))
+        chat_ids = [chat_id for chat_id in chat_ids if crud.telegram_subscription_state(db, chat_id) is not False]
     return list(dict.fromkeys(chat_ids))
 
 

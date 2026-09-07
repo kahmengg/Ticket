@@ -45,6 +45,8 @@ Watchlist matching is case-insensitive and mostly ignores spacing/punctuation. F
 
 Ticket sale reminders are watchlist-only. A user receives sale reminders only for concerts matching their watched keywords.
 
+Only `/start` subscribes or reactivates a chat. `/stop` disables event alerts and sale reminders while preserving the watchlist. Other messages and commands do not reactivate alerts. An inactive chat is excluded even if its ID is configured in the environment.
+
 ## Alert Messages
 
 Full event alerts include:
