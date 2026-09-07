@@ -103,6 +103,7 @@ tests/
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
+python -m playwright install chromium --no-shell
 copy .env.example .env
 ```
 
@@ -260,7 +261,7 @@ Field selection is deterministic: Live Nation is preferred for the title, artist
 
 Migration `20260907_0003` preserves event IDs and alert history, backfills source listings and known sale dates, and removes URL/title-based uniqueness from canonical events. Only stable identities within a provider are unique. Reverting this migration requires restoring a backup because the old schema cannot represent multiple performances with the same URL.
 
-This storage phase does not yet fetch Ticketmaster. The Ticketmaster scraper and multi-source scheduling are the next phases.
+`TicketmasterSGScraper` reads the public concert listing and detail tables with an identified Playwright Chromium browser. It follows the listing's “more” control, keeps separate performance IDs, extracts published prices/status and named sale windows, and reports inaccessible pages or changed layouts. It never opens the ticket purchase links. Install Chromium with `python -m playwright install chromium --no-shell`; Linux deployments also require Chromium's system libraries (`python -m playwright install --with-deps chromium --no-shell` during image construction). Missing sale years remain unknown rather than being guessed.
 
 ### Planned features
 

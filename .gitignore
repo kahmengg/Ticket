@@ -9,5 +9,6 @@ ticket_assistant.db
 *.sqlite3
 *.log
 *.check.lock
+.scratch/
 DEPLOYMENT.md
 MIGRATION.md
