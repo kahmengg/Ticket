@@ -250,6 +250,20 @@ If the hosting service is asleep, in-process reminders and retries cannot run. T
 
 ## Future Improvements
 
+### Source-aware storage
+
+Each event represents one performance. Its `listings` retain each provider's stable ID, URL, last-known fields, named sale windows, and observation time. The event API includes these listings and `field_provenance`, mapping canonical fields to listing IDs. Existing `url` and `source_id` fields continue to identify the primary listing. Full Telegram messages include additional provider links; compact commands retain the primary link.
+
+Providers sharing a detail URL across performances must supply distinct `source_event_id` values. Live Nation currently uses the URL as its fallback identity. Matching across providers requires the same UTC performance time, normalized venue, compatible title, and no contradictory artist. Ambiguous matches remain separate. Missing dates or venues do not match automatically.
+
+Field selection is deterministic: Live Nation is preferred for the title, artist, venue, performance date and primary URL; Ticketmaster Singapore is preferred for sale dates, status and published price information. A price and currency come from the same listing. Missing observations retain last-known values; raw observations separately record missing fields. Missing listings or sale windows are not treated as cancellations.
+
+Migration `20260907_0003` preserves event IDs and alert history, backfills source listings and known sale dates, and removes URL/title-based uniqueness from canonical events. Only stable identities within a provider are unique. Reverting this migration requires restoring a backup because the old schema cannot represent multiple performances with the same URL.
+
+This storage phase does not yet fetch Ticketmaster. The Ticketmaster scraper and multi-source scheduling are the next phases.
+
+### Planned features
+
 - Add more official event sources.
 - Add a small admin dashboard.
 - Add richer user preferences.

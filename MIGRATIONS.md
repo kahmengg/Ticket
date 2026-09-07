@@ -41,6 +41,8 @@ That means your current production database can keep running, and future schema 
 
 ## Common Commands
 
+Source-aware storage is introduced by `20260907_0003`. It backfills one listing per existing event and generic sale windows for known general-sale/presale dates. Existing event IDs, subscribers, watchlists and alerts remain intact. Canonical URLs are no longer unique because one page may list multiple performances. Restore a pre-migration backup to revert; downgrade intentionally refuses to discard or merge data. SQLite migration tests include foreign-key integrity checks. Postgres staging verification is still required before production rollout.
+
 Run all pending migrations:
 
 ```powershell

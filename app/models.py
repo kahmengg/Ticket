@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -41,9 +41,6 @@ class Source(Base):
 
 class Event(Base):
     __tablename__ = "events"
-    __table_args__ = (
-        UniqueConstraint("title", "venue_name", "event_date", name="uq_event_identity"),
-    )
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     source_id: Mapped[int | None] = mapped_column(ForeignKey("sources.id"), index=True)
@@ -53,7 +50,11 @@ class Event(Base):
     event_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     sale_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     presale_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    url: Mapped[str] = mapped_column(String(1000), nullable=False, unique=True, index=True)
+    # A detail page may advertise several performances; listing IDs carry identity.
+    url: Mapped[str] = mapped_column(String(1000), nullable=False, index=True)
+    price_summary: Mapped[str | None] = mapped_column(Text)
+    currency: Mapped[str | None] = mapped_column(String(3))
+    field_provenance: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
     status: Mapped[str] = mapped_column(String(50), default="active", index=True)
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     revision: Mapped[int] = mapped_column(default=1, server_default="1")
@@ -64,6 +65,55 @@ class Event(Base):
 
     source: Mapped[Source | None] = relationship(back_populates="events")
     alerts: Mapped[list["Alert"]] = relationship(back_populates="event")
+    listings: Mapped[list["SourceListing"]] = relationship(back_populates="event", lazy="selectin")
+
+
+class SourceListing(Base):
+    __tablename__ = "source_listings"
+    __table_args__ = (UniqueConstraint("source_id", "external_id", name="uq_source_listing_identity"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    event_id: Mapped[int] = mapped_column(ForeignKey("events.id"), index=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey("sources.id"), index=True)
+    external_id: Mapped[str] = mapped_column(String(1000))
+    url: Mapped[str] = mapped_column(String(1000), index=True)
+    title: Mapped[str] = mapped_column(String(500))
+    artist_name: Mapped[str | None] = mapped_column(String(255))
+    venue_name: Mapped[str | None] = mapped_column(String(255))
+    event_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    sale_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    presale_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str | None] = mapped_column(String(50))
+    price_summary: Mapped[str | None] = mapped_column(Text)
+    currency: Mapped[str | None] = mapped_column(String(3))
+    # Keep the latest observation separately from retained, last-known field values.
+    observed_data: Mapped[dict] = mapped_column(JSON, default=dict)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    event: Mapped[Event] = relationship(back_populates="listings")
+    source: Mapped[Source] = relationship(lazy="joined")
+    sale_windows: Mapped[list["SaleWindow"]] = relationship(
+        back_populates="listing", cascade="all, delete-orphan", lazy="selectin",
+    )
+
+    @property
+    def source_name(self) -> str:
+        return self.source.name
+
+
+class SaleWindow(Base):
+    __tablename__ = "sale_windows"
+    __table_args__ = (UniqueConstraint("listing_id", "external_id", name="uq_listing_sale_window"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    listing_id: Mapped[int] = mapped_column(ForeignKey("source_listings.id"), index=True)
+    external_id: Mapped[str] = mapped_column(String(500))
+    name: Mapped[str] = mapped_column(String(255))
+    kind: Mapped[str] = mapped_column(String(20))
+    starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    listing: Mapped[SourceListing] = relationship(back_populates="sale_windows")
 
 
 class Alert(Base):

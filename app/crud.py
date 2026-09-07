@@ -18,7 +18,9 @@ def get_or_create_source(db: Session, name: str, base_url: str, source_type: str
 
 
 def get_event_by_url(db: Session, url: str) -> Event | None:
-    return db.scalar(select(Event).where(Event.url == url))
+    # A shared detail URL is no longer a unique event identifier.
+    matches = list(db.scalars(select(Event).where(Event.url == url).limit(2)))
+    return matches[0] if len(matches) == 1 else None
 
 
 def get_event_by_identity(
@@ -27,13 +29,14 @@ def get_event_by_identity(
     venue_name: str | None,
     event_date: datetime | None,
 ) -> Event | None:
-    return db.scalar(
+    matches = list(db.scalars(
         select(Event).where(
             Event.title == title,
             Event.venue_name == venue_name,
             Event.event_date == event_date,
-        )
-    )
+        ).limit(2)
+    ))
+    return matches[0] if len(matches) == 1 else None
 
 
 def list_events(db: Session) -> list[Event]:

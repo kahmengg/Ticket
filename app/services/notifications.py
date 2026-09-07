@@ -184,6 +184,7 @@ def format_event_message(event: Event, alert_type: str = "new_event") -> str:
     if event.presale_date:
         lines.append(f"Presale date: {_format_datetime(event.presale_date)}")
     lines.append(f"URL: {event.url}")
+    lines.extend(_additional_source_links(event))
     concert_calendar_url = _google_calendar_url(
         title=_clean_event_title(event.title),
         start=event.event_date,
@@ -219,6 +220,7 @@ def format_sale_reminder_message(event: Event, keyword: str, reminder_hours: int
     if event.event_date:
         lines.append(f"Event date: {_format_datetime(event.event_date)}")
     lines.append(f"URL: {event.url}")
+    lines.extend(_additional_source_links(event))
     sale_calendar_url = _google_calendar_url(
         title=f"Ticket sale: {_clean_event_title(event.title)}",
         start=event.sale_date,
@@ -238,6 +240,17 @@ def format_sale_reminder_message(event: Event, keyword: str, reminder_hours: int
     if concert_calendar_url:
         lines.append(f"Add concert to calendar: {concert_calendar_url}")
     return "\n".join(lines)
+
+
+def _additional_source_links(event: Event) -> list[str]:
+    # Retain the canonical URL while offering links to the other providers.
+    seen = {event.url}
+    lines = []
+    for listing in sorted(event.listings, key=lambda item: item.source_name):
+        if listing.url not in seen:
+            lines.append(f"{listing.source_name}: {listing.url}")
+            seen.add(listing.url)
+    return lines
 
 
 def _clean_event_title(title: str) -> str:
