@@ -8,6 +8,14 @@ from sqlalchemy import select
 from app import crud, scheduler
 from app.models import Alert, Event, Source
 from app.services import notifications
+from app.scrapers.ticketmaster_sg import SourceFetchError
+
+
+def test_controlled_source_failure_reports_actionable_reason(db_session, configured):
+    result = scheduler.run_event_check(db_session, scrapers=[
+        scraper("Ticketmaster Singapore", failure=SourceFetchError("Ticketmaster returned HTTP 403.")),
+    ])
+    assert result.source_results[0]["error"] == "Ticketmaster returned HTTP 403."
 
 
 def item(source, title="Artist show", **extra):

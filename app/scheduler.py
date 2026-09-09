@@ -8,7 +8,7 @@ from app.config import settings
 from app import crud
 from app.database import SessionLocal
 from app.scrapers.livenation_sg import LiveNationSGScraper
-from app.scrapers.ticketmaster_sg import TicketmasterSGScraper
+from app.scrapers.ticketmaster_sg import SourceFetchError, TicketmasterSGScraper
 from app.models import Event, utc_now
 from app.services.source_matching import CANONICAL_FIELDS
 from app.services.event_detector import DetectionResult, generate_content_hash, process_events
@@ -49,9 +49,10 @@ def run_event_check(db: Session | None = None, *, scrapers=None) -> DetectionRes
                         raise ValueError("Empty source result")
                     batches.append((scraper, observations, None))
                 except Exception as exc:
-                    # Do not expose request URLs or credentials embedded in exception text.
-                    batches.append((scraper, [], type(exc).__name__))
-                    logger.warning("Source fetch failed: %s (%s)", scraper.source_name, type(exc).__name__)
+                    # Only our controlled scraper errors are safe to expose; library errors can contain secrets.
+                    reason = str(exc) if isinstance(exc, SourceFetchError) else type(exc).__name__
+                    batches.append((scraper, [], reason))
+                    logger.warning("Source fetch failed: %s (%s)", scraper.source_name, reason)
             before = {event.id: (generate_content_hash({field: getattr(event, field) for field in CANONICAL_FIELDS}), event.revision)
                       for event in session.scalars(select(Event))}
             touched, eligible = set(), set()
