@@ -1,5 +1,15 @@
 # Multi-source deployment
 
+## Ticketmaster access diagnosis (9 September 2026)
+
+The Render service is now Docker and Chromium installs successfully. An identified catalogue request succeeds locally (HTTP 200, 18 initial public detail links), while the deployed scraper receives HTTP 403 before extracting events. This establishes environment-dependent access rejection; it does not establish the exact IP, browser or security rule used by Ticketmaster. Changing database settings cannot address this failure.
+
+The official Discovery API adapter activates when `TICKETMASTER_API_KEY` is set. Obtain a Consumer Key from https://developer.ticketmaster.com/products-and-docs/tutorials/events-search/search_events_with_discovery_api.html and enter it privately in Render Environment. Save and redeploy, then run Scheduled ticket check. No key is committed or printed in errors. The adapter queries Singapore music events with bounded pagination and retains dates, presales, prices and status where provided.
+
+Singapore is a documented country filter, but that does not guarantee ticketmaster.sg catalogue coverage. A live comparison requires a user-owned key. An empty response remains an explicit error and does not complete a silent baseline. API observations use the separate `Ticketmaster Discovery Singapore` source identity and match Live Nation performances conservatively. Do not switch between API and website IDs under the same source identity.
+
+Until a key and coverage are verified, the website source remains enabled and its 403 stays visible. Live Nation and reminder checks continue independently.
+
 1. Back up the existing Postgres database before deploying. Startup upgrades Alembic to `20260908_0004`, preserving event IDs, subscribers and sent alerts. The source-listing migration requires a backup restore to reverse.
 2. Build the repository Dockerfile. It installs Python 3.12, Chromium and Linux browser dependencies. `render.yaml` describes a Docker web service; an existing native Python service may require migration in Render. A Git push alone does not confirm that its runtime changed.
 3. Retain the existing `DATABASE_URL`, Telegram token, webhook secret and `RUN_CHECK_SECRET`. Enable both provider flags. Keep `SEND_ALERTS_ON_FIRST_RUN=false` to seed Ticketmaster silently. Never put credentials in Git.

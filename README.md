@@ -271,6 +271,8 @@ Migration `20260907_0003` preserves event IDs and alert history, backfills sourc
 
 ## Source operations
 
+For server deployments rejected by ticketmaster.sg with HTTP 403, set `TICKETMASTER_API_KEY` to your Ticketmaster Developer Consumer Key. This selects the official Discovery API instead of the browser scraper. Singapore catalogue coverage must be checked with your key; a supported country filter alone does not guarantee coverage. See the deployment guide for the observed Render access issue and setup steps.
+
 `ENABLE_LIVENATION` and `ENABLE_TICKETMASTER` default to true. Each source seeds its first successful run silently. Partial failures remain visible and do not complete the baseline.
 
 `GET /sources/status` reports source health; `POST /run-reminders` checks stored reminders and retries deliveries. Both require the `RUN_CHECK_SECRET` bearer token.

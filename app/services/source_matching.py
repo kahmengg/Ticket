@@ -111,9 +111,9 @@ def update_listing(listing: SourceListing, scraped: dict) -> None:
 
 
 def _priority(listing: SourceListing, field: str):
-    preferred = ("Ticketmaster Singapore", "Live Nation Singapore") if field in {
+    preferred = ("Ticketmaster Singapore", "Ticketmaster Discovery Singapore", "Live Nation Singapore") if field in {
         "sale_date", "presale_date", "status", "price_summary", "currency",
-    } else ("Live Nation Singapore", "Ticketmaster Singapore")
+    } else ("Live Nation Singapore", "Ticketmaster Singapore", "Ticketmaster Discovery Singapore")
     name = listing.source.name
     rank = preferred.index(name) if name in preferred else len(preferred)
     return rank, name, listing.external_id

@@ -44,6 +44,7 @@ class Settings:
     enable_scheduler: bool = _bool_from_env(os.getenv("ENABLE_SCHEDULER"), False)
     enable_livenation: bool = _bool_from_env(os.getenv("ENABLE_LIVENATION"), True)
     enable_ticketmaster: bool = _bool_from_env(os.getenv("ENABLE_TICKETMASTER"), True)
+    ticketmaster_api_key: str | None = field(default=os.getenv("TICKETMASTER_API_KEY"), repr=False)
     send_alerts_on_first_run: bool = _bool_from_env(os.getenv("SEND_ALERTS_ON_FIRST_RUN"), False)
     sale_reminder_hours: list[int] = field(default_factory=list)
     livenation_sg_events_url: str = os.getenv(

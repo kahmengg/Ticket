@@ -9,6 +9,7 @@ from app import crud
 from app.database import SessionLocal
 from app.scrapers.livenation_sg import LiveNationSGScraper
 from app.scrapers.ticketmaster_sg import SourceFetchError, TicketmasterSGScraper
+from app.scrapers.ticketmaster_api import TicketmasterAPIScraper
 from app.models import Event, utc_now
 from app.services.source_matching import CANONICAL_FIELDS
 from app.services.event_detector import DetectionResult, generate_content_hash, process_events
@@ -24,7 +25,9 @@ def enabled_scrapers():
     if settings.enable_livenation:
         scrapers.append(LiveNationSGScraper())
     if settings.enable_ticketmaster:
-        scrapers.append(TicketmasterSGScraper())
+        # Use the official server API when configured; do not retry a rejected website through proxies.
+        scrapers.append(TicketmasterAPIScraper(settings.ticketmaster_api_key)
+                        if settings.ticketmaster_api_key else TicketmasterSGScraper())
     return scrapers
 
 

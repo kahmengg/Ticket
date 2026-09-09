@@ -13,6 +13,8 @@ from sqlalchemy.orm import Session
 from app.database import Base
 from app.scrapers.livenation_sg import LiveNationSGScraper
 from app.scrapers.ticketmaster_sg import TicketmasterSGScraper
+from app.scrapers.ticketmaster_api import TicketmasterAPIScraper
+from app.config import settings
 from app.services.event_detector import process_events
 from app.schemas import EventRead
 
@@ -30,7 +32,8 @@ def main():
     if args.source in {"both", "livenation"}:
         scrapers.append(LiveNationSGScraper())
     if args.source in {"both", "ticketmaster"}:
-        scrapers.append(TicketmasterSGScraper())
+        scrapers.append(TicketmasterAPIScraper(settings.ticketmaster_api_key)
+                        if settings.ticketmaster_api_key and not args.ticketmaster_cache else TicketmasterSGScraper())
     for scraper in scrapers:
         try:
             if isinstance(scraper, TicketmasterSGScraper) and args.ticketmaster_cache:
