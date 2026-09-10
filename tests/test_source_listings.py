@@ -134,3 +134,24 @@ def test_named_presale_replaces_generic_fallback(db_session):
     process_events(db_session, [observation(sale_windows=[named])])
     assert [window.external_id for window in event.listings[0].sale_windows] == ["fan-club"]
     assert event.presale_date.replace(tzinfo=timezone.utc) == named["starts_at"]
+
+
+@pytest.mark.parametrize("left,right,title", [
+    ("The Star Theatre, The Star Performing Arts Centre Singapore", "The Star Theatre", "Artist World Tour in Singapore"),
+    ("*SCAPE Ground Theatre", "*SCAPE The Ground Theatre", "Artist World Tour"),
+])
+def test_audited_venue_aliases_match_only_same_performance(db_session, left, right, title):
+    original = process_events(db_session, [observation(venue_name=left)]).new_events[0]
+    matched = process_events(db_session, [observation("Ticketmaster Singapore", venue_name=right, title=title)])
+    assert matched.new_events == []
+    assert len(original.listings) == 2
+    # The same show on a different date is a separate concert, even with an alias.
+    another = process_events(db_session, [observation("Ticketmaster Singapore", venue_name=right,
+        title=title, source_event_id="other-date", event_date=WHEN + timedelta(days=1))])
+    assert len(another.new_events) == 1
+
+
+def test_esplanade_distinct_halls_never_alias(db_session):
+    process_events(db_session, [observation(venue_name="Esplanade Theatre")])
+    result = process_events(db_session, [observation("Ticketmaster Singapore", venue_name="Esplanade Theatre Studio")])
+    assert len(result.new_events) == 1

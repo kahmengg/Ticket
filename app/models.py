@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, JSON, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Index, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -48,6 +48,11 @@ class Source(Base):
 
 class Event(Base):
     __tablename__ = "events"
+    # Keep metadata consistent with the additive migration and paged browsing queries.
+    __table_args__ = (
+        Index("ix_events_browse_discovery", "discovery_kind", "discovered_at", "sort_title", "event_date", "id"),
+        Index("ix_events_browse_upcoming", "event_date", "sort_title", "id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     source_id: Mapped[int | None] = mapped_column(ForeignKey("sources.id"), index=True)

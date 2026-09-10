@@ -20,7 +20,12 @@ def normalized(value: str | None) -> str:
 
 def normalized_venue(value: str | None) -> str:
     # Country suffixes differ across providers; preserve names beginning with Singapore.
-    return re.sub(r" singapore$", "", normalized(value))
+    name = re.sub(r" singapore$", "", normalized(value))
+    # Exact, audited aliases only: distinct halls and performance dates stay separate.
+    return {
+        "the star theatre the star performing arts centre": "the star theatre",
+        "scape the ground theatre": "scape ground theatre",
+    }.get(name, name)
 
 
 def _compatible_title(left: str, right: str) -> bool:

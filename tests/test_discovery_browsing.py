@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import event as sqlalchemy_event
+
 from app import crud
 from app.models import Event
 from app.services.event_detector import process_events
@@ -45,3 +47,22 @@ def test_pages_clamp_and_exclude_newer_imports(db_session):
     db_session.commit()
     events, total, page, pages = crud.browse_events(db_session, "latest", NOW, NOW, 99)
     assert (total, page, pages, len(events)) == (12, 2, 3, 2)
+
+
+def test_browsing_uses_count_and_limited_query_without_relationship_loads(db_session):
+    for i in range(12):
+        db_session.add(Event(title=f"Show {i}", url="https://example.com", content_hash="x", first_seen_at=NOW))
+    db_session.commit()
+    statements = []
+    def record(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+    engine = db_session.get_bind()
+    sqlalchemy_event.listen(engine, "before_cursor_execute", record)
+    try:
+        events, total, _, _ = crud.browse_events(db_session, "latest", NOW, NOW)
+        assert len(events) == 5 and total == 12
+        assert len(statements) == 2
+        assert "LIMIT" in statements[1]
+        assert all("source_listings" not in statement for statement in statements)
+    finally:
+        sqlalchemy_event.remove(engine, "before_cursor_execute", record)

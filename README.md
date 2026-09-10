@@ -25,8 +25,8 @@ The project is intentionally safe and conservative. It does **not** automate tic
 
 ```text
 /start              Subscribe this chat
-/upcoming           Show the next 5 upcoming concerts
-/latest             Show the 5 newest concerts discovered
+/upcoming           Browse upcoming concerts, five per page
+/latest             Browse latest concerts found, five per page
 /watch artist       Watch an artist or event keyword
 /watchlist          Show watched keywords
 /unwatch artist     Remove a watched keyword
@@ -140,7 +140,7 @@ pytest
 | `RUN_CHECK_SECRET` | empty | Required bearer token for the scheduled `/run-check` endpoint. |
 | `SCRAPE_INTERVAL_HOURS` | `6` | How often to fetch source event data. Minimum is 1 hour. |
 | `REMINDER_INTERVAL_MINUTES` | `30` | How often to check the database for watchlist sale reminders. Does not scrape source sites. |
-| `ENABLE_SCHEDULER` | `false` | Set to `true` in production. |
+| `ENABLE_SCHEDULER` | `false` | Keep false with GitHub scheduling; true only without an external scheduler. |
 | `SEND_ALERTS_ON_FIRST_RUN` | `false` | Seeds existing concerts without alerting old/current events. Set `true` only for testing. |
 | `SALE_REMINDER_HOURS` | `24,1` | Comma-separated watchlist-only sale reminder windows. |
 | `LIVENATION_SG_EVENTS_URL` | filtered Live Nation SG URL | Source URL used to derive Live Nation filters. |

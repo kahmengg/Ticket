@@ -6,15 +6,15 @@ Recommended MVP production setup:
 - Database: Supabase Postgres
 - Telegram subscriptions: webhook to `POST /telegram/webhook`
 
-This keeps the app simple: one web process runs the API and scheduler, and Supabase stores events, subscribers, and alert history.
+One Render web process serves the API. GitHub Actions triggers source checks and reminders; Supabase stores events, subscribers, and alert history.
 
 ## Why Render + Supabase
 
-Render can run this FastAPI app directly from the repository with:
+Render runs the included Dockerfile, which installs Python dependencies and the Chromium runtime used by website adapters:
 
 ```text
-Build Command: pip install -r requirements.txt
-Start Command: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+Runtime: Docker
+Dockerfile Path: ./Dockerfile
 ```
 
 Supabase gives you a managed Postgres database, which is a better production fit than local SQLite.
@@ -67,9 +67,8 @@ Only migrate SQLite if you intentionally want to preserve local subscribers or a
 3. Use these settings:
 
 ```text
-Runtime: Python
-Build Command: pip install -r requirements.txt
-Start Command: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+Runtime: Docker
+Dockerfile Path: ./Dockerfile
 Health Check Path: /health
 ```
 
@@ -78,12 +77,14 @@ Or use the included `render.yaml` Blueprint.
 4. Add environment variables in Render:
 
 ```env
-PYTHON_VERSION=3.12.13
 DATABASE_URL=your_supabase_postgres_connection_string
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 TELEGRAM_WEBHOOK_SECRET=make_a_long_random_secret
 RUN_CHECK_SECRET=make_a_different_long_random_secret
-ENABLE_SCHEDULER=true
+ENABLE_SCHEDULER=false
+ENABLE_LIVENATION=true
+ENABLE_TICKETMASTER=true
+TICKETMASTER_API_KEY=your_ticketmaster_discovery_api_key
 SCRAPE_INTERVAL_HOURS=6
 REMINDER_INTERVAL_MINUTES=30
 SEND_ALERTS_ON_FIRST_RUN=false
@@ -96,7 +97,9 @@ Do not set `TELEGRAM_CHAT_ID` in production unless you want to force alerts to a
 
 Free Render web services sleep when idle, so APScheduler cannot guarantee six-hour checks by
 itself. The included GitHub Actions workflow calls the app every six hours as a reliable trigger.
-APScheduler remains enabled as a best-effort fallback while the web service is awake.
+GitHub Actions is the production scheduling authority: source checks run every six hours and sale
+reminders every half hour. Keep `ENABLE_SCHEDULER=false` in Render to prevent duplicate in-process
+schedules. The in-process scheduler remains available for deployments without external scheduling.
 
 In GitHub under **Settings > Secrets and variables > Actions**, configure:
 
@@ -145,13 +148,24 @@ The app should save your chat and reply with a subscription confirmation.
 Available Telegram commands after the webhook is connected:
 
 - `/start` subscribes the chat.
-- `/upcoming` shows the next 5 upcoming concerts.
-- `/latest` shows the 5 newest concerts discovered by the app.
+- `/upcoming` browses future concerts, nearest first, five per page.
+- `/latest` browses latest concerts found, five per page; initial imports appear in an older section.
 - `/watch artist` watches an artist or event keyword.
 - `/watchlist` shows watched keywords.
 - `/unwatch artist` removes a watched keyword.
 - `/stop` unsubscribes the chat.
 - `/help` lists commands.
+
+Previous / Next edit the same message. Refresh reloads the catalogue; new discoveries are excluded
+from an existing browsing session until refresh. Controls expire after 24 hours: rerun the command.
+Browsing does not start scraping or reactivate a stopped subscription. The webhook registration
+script explicitly enables `callback_query` updates; rerun it if an older webhook excludes them.
+
+`/latest` uses discovery batches, not unverified website publication dates. Events found in the same
+check have equal recency and sort by normalized title, performance date and ID. Existing records
+remain labelled **Previously imported**, preserving their alert history. Adding a provider or editing
+details does not reset discovery time. `/upcoming` excludes cancelled and postponed performances;
+undated concerts with future sales follow dated performances.
 
 ## First Production Check
 
@@ -185,6 +199,6 @@ Future checks should alert only genuinely new or changed events.
 
 ## Production Notes
 
-- Keep only one scheduled instance running. If you scale the Render service above one instance, the scheduler may run more than once.
-- For a larger production setup, move the scheduler into a separate worker or cron job.
+- Keep GitHub Actions as the sole production scheduling authority and check both workflow histories after deployment.
+- A database lock prevents overlapping source jobs; alert uniqueness prevents ordinary repeated checks from resending unchanged changes. A crash after Telegram accepts a message can still cause a retry duplicate.
 - Alembic is now configured. See `MIGRATIONS.md` before making future schema changes.
