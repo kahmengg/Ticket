@@ -14,7 +14,7 @@ def main() -> int:
         return 1
 
     webhook_url = public_base_url.rstrip("/") + "/telegram/webhook"
-    payload = {"url": webhook_url}
+    payload = {"url": webhook_url, "allowed_updates": ["message", "edited_message", "callback_query"]}
     if secret:
         payload["secret_token"] = secret
 

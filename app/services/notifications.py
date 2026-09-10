@@ -17,6 +17,24 @@ from app.services.watchlist import WatchMatch, matched_watchlists_for_event
 logger = logging.getLogger(__name__)
 
 
+def telegram_api_call(method: str, payload: dict):
+    if not settings.telegram_bot_token:
+        return None
+    try:
+        response = requests.post(f"https://api.telegram.org/bot{settings.telegram_bot_token}/{method}",
+                                 json=payload, timeout=10)
+        data = response.json()
+        # Repeated button taps may legitimately request an identical message.
+        if method.startswith("editMessage") and "message is not modified" in str(data.get("description", "")).lower():
+            return True
+        if response.ok and data.get("ok"):
+            return data.get("result", True)
+    except (requests.RequestException, ValueError):
+        pass
+    logger.warning("Telegram %s failed.", method)
+    return None
+
+
 def queue_event_alerts(events: list[Event], alert_type: str, db: Session) -> None:
     for event in events:
         key = "new_event" if alert_type == "new_event" else f"event_updated:r{event.revision}"

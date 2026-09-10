@@ -13,6 +13,7 @@ from app.scheduler import run_event_check, run_sale_reminder_check
 from app.models import Source
 from app.services.notifications import get_notification_chat_ids, send_telegram_message, send_telegram_message_to_chat
 from app.services.telegram_commands import handle_telegram_command
+from app.services.telegram_browsing import handle_browse_callback, send_browse_page
 from app.services.job_lock import CheckAlreadyRunning
 
 router = APIRouter()
@@ -115,6 +116,10 @@ def telegram_webhook(
     ):
         raise HTTPException(status_code=403, detail="Invalid Telegram webhook secret.")
 
+    callback = update.get("callback_query")
+    if isinstance(callback, dict):
+        handled = handle_browse_callback(db, callback, settings.telegram_webhook_secret)
+        return {"ok": True, "handled": handled}
     message = update.get("message") or update.get("edited_message")
     if not isinstance(message, dict):
         return {"ok": True, "saved": False}
@@ -141,6 +146,10 @@ def telegram_webhook(
     db.commit()
 
     text = str(message.get("text") or "").strip()
+    command = text.split(maxsplit=1)[0].lower().split("@")[0] if text else ""
+    if command in {"/latest", "/upcoming"}:
+        send_browse_page(db, command[1:], subscriber.chat_id, settings.telegram_webhook_secret)
+        return {"ok": True, "saved": True}
     command_reply = handle_telegram_command(text, subscriber.chat_id, db)
     if command_reply:
         send_telegram_message_to_chat(subscriber.chat_id, command_reply)

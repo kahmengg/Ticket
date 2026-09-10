@@ -4,14 +4,14 @@ from sqlalchemy.orm import Session
 
 from app import crud
 from app.models import Event
-from app.services.notifications import format_event_message
+from app.services.notifications import _clean_event_title, _format_datetime
 from app.services.watchlist import add_watch_keyword, matching_events_for_keyword, remove_watch_keyword
 
 
 HELP_MESSAGE = """Ticket Sale Assistant commands:
 /start - subscribe to alerts
-/upcoming - next upcoming concerts
-/latest - newest concerts found
+/upcoming - browse upcoming concerts (Next/Previous)
+/latest - browse newest discoveries (Next/Previous)
 /watch artist - watch an artist or event keyword
 /watchlist - show your watched keywords
 /unwatch artist - remove a watched keyword
@@ -93,8 +93,14 @@ def _format_event_list(title: str, events: list[Event]) -> str:
 
 
 def _compact_event_message(event: Event) -> str:
-    lines = format_event_message(event).splitlines()
-    keep_prefixes = ("Venue:", "Event date:", "Sale date:", "Presale date:", "URL:")
-    compact_lines = [lines[0]]
-    compact_lines.extend(line for line in lines[1:] if line.startswith(keep_prefixes))
-    return "\n".join(compact_lines)
+    # Compact command replies need no calendar links or provider relationship queries.
+    lines = [_clean_event_title(event.title)]
+    for label, value in (("Venue", event.venue_name),
+                         ("Event date", _format_datetime(event.event_date) if event.event_date else None),
+                         ("Sale date", _format_datetime(event.sale_date) if event.sale_date else None),
+                         ("Presale date", _format_datetime(event.presale_date) if event.presale_date else None),
+                         ("Prices", event.price_summary), ("Status", event.status)):
+        if value:
+            lines.append(f"{label}: {value}")
+    lines.append(f"URL: {event.url}")
+    return "\n".join(lines)
