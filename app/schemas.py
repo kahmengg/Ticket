@@ -50,6 +50,8 @@ class EventRead(EventBase):
     id: int
     source_id: int | None
     content_hash: str
+    discovery_kind: str | None = None
+    discovered_at: datetime | None = None
     first_seen_at: datetime
     last_seen_at: datetime
     created_at: datetime

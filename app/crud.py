@@ -43,31 +43,44 @@ def list_events(db: Session) -> list[Event]:
     return list(db.scalars(select(Event).order_by(Event.first_seen_at.desc(), Event.id.desc())))
 
 
+def _browse_statement(kind: str, now: datetime):
+    from sqlalchemy import case, and_
+    title = func.coalesce(func.nullif(Event.sort_title, ""), func.lower(Event.title))
+    if kind == "latest":
+        # Initial imports share an older group rather than pretending insertion order is recency.
+        recent = Event.discovery_kind == "discovered"
+        return select(Event).order_by(case((recent, 0), else_=1),
+            case((recent, Event.discovered_at), else_=None).desc().nulls_last(),
+            title, Event.event_date.asc().nulls_last(), Event.id)
+    if kind != "upcoming":
+        raise ValueError("Unknown concert list")
+    return select(Event).where(
+        or_(Event.status.is_(None), Event.status.not_in(["cancelled", "postponed"])),
+        or_(Event.event_date >= now, and_(Event.event_date.is_(None), Event.sale_date >= now)),
+    ).order_by(Event.event_date.asc().nulls_last(), title, Event.sale_date.asc().nulls_last(), Event.id)
+
+
+def browse_events(db: Session, kind: str, now: datetime, cutoff: datetime, page: int = 0):
+    from sqlalchemy.orm import noload
+    statement = _browse_statement(kind, now).where(Event.first_seen_at <= cutoff)
+    total = db.scalar(select(func.count()).select_from(statement.order_by(None).subquery())) or 0
+    pages = max(1, (total + 4) // 5)
+    page = max(0, min(page, pages - 1))
+    # Compact messages use scalar fields only; avoid loading provider relationships.
+    events = list(db.scalars(statement.options(noload(Event.listings)).offset(page * 5).limit(5)))
+    return events, total, page, pages
+
+
 def list_latest_events(db: Session, limit: int = 5) -> list[Event]:
-    return list(db.scalars(select(Event).order_by(Event.first_seen_at.desc(), Event.id.desc()).limit(limit)))
+    return list(db.scalars(_browse_statement("latest", utc_now()).limit(limit)))
 
 
 def list_upcoming_events(db: Session, now: datetime) -> list[Event]:
-    return list(
-        db.scalars(
-            select(Event)
-            .where(or_(Event.event_date >= now, Event.sale_date >= now))
-            .where(or_(Event.status.is_(None), Event.status.not_in(["cancelled", "postponed"])))
-            .order_by(Event.event_date.asc().nulls_last(), Event.sale_date.asc().nulls_last())
-        )
-    )
+    return list(db.scalars(_browse_statement("upcoming", now)))
 
 
 def list_upcoming_events_limited(db: Session, now: datetime, limit: int = 5) -> list[Event]:
-    return list(
-        db.scalars(
-            select(Event)
-            .where(or_(Event.event_date >= now, Event.sale_date >= now))
-            .where(or_(Event.status.is_(None), Event.status.not_in(["cancelled", "postponed"])))
-            .order_by(Event.event_date.asc().nulls_last(), Event.sale_date.asc().nulls_last())
-            .limit(limit)
-        )
-    )
+    return list(db.scalars(_browse_statement("upcoming", now).limit(limit)))
 
 
 def count_events(db: Session) -> int:

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app import crud
 from app.models import Event, SourceListing, utc_now
-from app.services.source_matching import CANONICAL_FIELDS, find_matching_event, reconcile_event, update_listing
+from app.services.source_matching import CANONICAL_FIELDS, find_matching_event, normalized, reconcile_event, update_listing
 from app.scrapers.base import ScrapedEvent
 
 
@@ -38,8 +38,10 @@ def generate_content_hash(event: ScrapedEvent | dict) -> str:
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
-def process_events(db: Session, events: list[ScrapedEvent], *, commit: bool = True) -> DetectionResult:
+def process_events(db: Session, events: list[ScrapedEvent], *, commit: bool = True,
+                   discovery_at: datetime | None = None, initial_import: bool = False) -> DetectionResult:
     result = DetectionResult()
+    discovery_at = discovery_at or utc_now()
     touched: dict[int, tuple[Event, str | None]] = {}
     seen: dict[tuple[str, str], str | None] = {}
     for observation in events:
@@ -64,7 +66,9 @@ def process_events(db: Session, events: list[ScrapedEvent], *, commit: bool = Tr
                 # Populate matching fields immediately so another source in this batch can join it.
                 initial = {field: scraped[field] for field in CANONICAL_FIELDS if scraped.get(field) is not None}
                 initial.setdefault("status", "active")
-                event = Event(**initial, source_id=source.id, content_hash="")
+                event = Event(**initial, source_id=source.id, content_hash="",
+                              discovered_at=discovery_at,
+                              discovery_kind="baseline" if initial_import else "discovered")
                 db.add(event)
                 db.flush()
                 touched[event.id] = (event, None)
@@ -82,6 +86,7 @@ def process_events(db: Session, events: list[ScrapedEvent], *, commit: bool = Tr
     # Reconcile only once after all source observations, avoiding intermediate change alerts.
     for event, previous_hash in touched.values():
         reconcile_event(event)
+        event.sort_title = normalized(event.title)
         event.content_hash = generate_content_hash({field: getattr(event, field) for field in CANONICAL_FIELDS})
         if previous_hash is None:
             result.new_events.append(event)

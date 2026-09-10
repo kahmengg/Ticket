@@ -20,7 +20,7 @@ from sqlalchemy import text
 init_db()
 init_db()
 with engine.connect() as conn:
-    assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "20260908_0004"
+    assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "20260910_0005"
 with source_check_lock(engine) as first:
     assert first
     with source_check_lock(engine) as second:

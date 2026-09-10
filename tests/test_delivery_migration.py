@@ -24,7 +24,7 @@ with engine.connect() as conn:
     row = conn.execute(text("SELECT delivery_state,alert_type,message FROM alerts")).one()
     assert row == ('sent','sale_reminder_1h:2027-01-01T00:00:00+00:00','old message'), row
     assert conn.scalar(text("SELECT revision FROM events")) == 1
-    assert conn.scalar(text("SELECT version_num FROM alembic_version")) == '20260908_0004'
+    assert conn.scalar(text("SELECT version_num FROM alembic_version")) == '20260910_0005'
     assert conn.scalar(text("SELECT event_id FROM source_listings")) == 1
     assert conn.scalar(text("SELECT count(*) FROM sale_windows")) == 1
     assert conn.execute(text("PRAGMA foreign_key_check")).all() == []

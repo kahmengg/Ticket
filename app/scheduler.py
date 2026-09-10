@@ -45,6 +45,7 @@ def run_event_check(db: Session | None = None, *, scrapers=None) -> DetectionRes
             if not acquired:
                 raise CheckAlreadyRunning("An event check is already running.")
             batches = []
+            discovery_at = utc_now()
             for scraper in enabled_scrapers() if scrapers is None else scrapers:
                 try:
                     observations = scraper.fetch_events()
@@ -69,7 +70,9 @@ def run_event_check(db: Session | None = None, *, scrapers=None) -> DetectionRes
                     try:
                         # A bad provider batch rolls back independently, preserving the other source.
                         with session.begin_nested():
-                            detected = process_events(session, observations, commit=False)
+                            detected = process_events(session, observations, commit=False,
+                                                      discovery_at=discovery_at,
+                                                      initial_import=source.baseline_at is None)
                         ids = {event.id for event in detected.new_events + detected.updated_events + detected.unchanged_events}
                         touched.update(ids)
                         if not seeded:
