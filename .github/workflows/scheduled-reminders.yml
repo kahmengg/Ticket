@@ -1,13 +1,11 @@
 name: Scheduled sale reminders
 
 on:
-  schedule:
-    - cron: "7,37 * * * *"
+  # Supabase Cron owns the half-hour production schedule; this remains a manual fallback.
   workflow_dispatch:
 
 permissions:
   contents: read
-  actions: read
 
 concurrency:
   group: scheduled-sale-reminders
@@ -18,12 +16,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - name: Report overdue reminder scheduling
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: python scripts/check_schedule_gap.py
       - name: Check stored sale reminders and pending deliveries
         env:
           TICKET_CHECK_URL: ${{ vars.TICKET_CHECK_URL }}
