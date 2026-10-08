@@ -26,6 +26,8 @@ class ScrapedEvent(TypedDict):
     price_summary: NotRequired[str | None]
     currency: NotRequired[str | None]
     sale_windows: NotRequired[list[ScrapedSaleWindow]]
+    clear_fields: NotRequired[list[str]]
+    complete_sale_kinds: NotRequired[list[str]]
 
 
 class BaseScraper(ABC):

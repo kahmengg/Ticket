@@ -90,7 +90,17 @@ class TicketmasterAPIScraper(BaseScraper):
                   and isinstance(p.get("min"), (float, int)) and isinstance(p.get("max"), (float, int))]
         price = f"SGD {min(p['min'] for p in prices):g}–{max(p['max'] for p in prices):g}" if prices else None
         attractions = embedded.get("attractions", [])
+        # Explicit TBD/complete sale arrays can withdraw data; absent fields cannot.
+        clear_fields = []
+        if any(start.get(flag) for flag in ("dateTBD", "dateTBA", "timeTBA", "noSpecificTime")):
+            clear_fields.append("event_date")
+        if public.get("startTBD"):
+            clear_fields.append("sale_date")
+        if "presales" in sales and not any(w["kind"] == "presale" for w in windows):
+            clear_fields.append("presale_date")
         return dict(source_name=self.source_name, source_event_id=str(event_id), title=title, url=url,
+                    clear_fields=clear_fields,
+                    complete_sale_kinds=(["general"] if "public" in sales else []) + (["presale"] if "presales" in sales else []),
                     artist_name=attractions[0].get("name") if len(attractions) == 1 else None,
                     venue_name=venue.get("name"), event_date=event_date,
                     sale_date=min((w["starts_at"] for w in windows if w["kind"] == "general"), default=None),

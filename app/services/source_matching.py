@@ -78,14 +78,24 @@ def _json_value(value):
 
 
 def update_listing(listing: SourceListing, scraped: dict) -> None:
-    listing.observed_data = _json_value(scraped)
+    # An explicit withdrawal remains authoritative until the provider supplies a value.
+    cleared = set((listing.observed_data or {}).get("clear_fields", []))
+    cleared.update(scraped.get("clear_fields", []))
+    cleared.difference_update(field for field in CANONICAL_FIELDS if scraped.get(field) not in (None, ""))
+    listing.observed_data = {**_json_value(scraped), "clear_fields": sorted(cleared)}
     listing.last_seen_at = utc_now()
     for field in CANONICAL_FIELDS:
         value = scraped.get(field)
         # Missing extraction data must not erase the last known value.
-        if value is not None and value != "":
+        if field in scraped.get("clear_fields", []):
+            setattr(listing, field, None)
+        elif value is not None and value != "":
             setattr(listing, field, value)
     windows = scraped.get("sale_windows")
+    if windows is not None:
+        ids = {window["external_id"] for window in windows}
+        listing.sale_windows[:] = [w for w in listing.sale_windows
+            if w.kind not in scraped.get("complete_sale_kinds", []) or w.external_id in ids]
     if windows:
         # Named windows replace our generic fallback for that kind, not other named presales.
         kinds = {window["kind"] for window in windows if window.get("starts_at") is not None}
@@ -129,7 +139,8 @@ def reconcile_event(event: Event) -> None:
     for field in CANONICAL_FIELDS:
         if field == "currency":
             continue
-        available = [listing for listing in event.listings if getattr(listing, field) not in (None, "")]
+        available = [listing for listing in event.listings if getattr(listing, field) not in (None, "")
+                     or field in (listing.observed_data or {}).get("clear_fields", [])]
         if not available:
             continue
         selected = min(available, key=lambda listing: _priority(listing, field))

@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 
 from app import crud
 from app.services.notifications import _format_datetime, telegram_api_call
+from app.services.event_presentation import status_text
 
 TTL = 24 * 60 * 60
 
@@ -59,7 +60,7 @@ def page_content(db, kind, page, cutoff, now):
                              ("Event date", _format_datetime(event.event_date) if event.event_date else "Date to be confirmed"),
                              ("Sale date", _format_datetime(event.sale_date) if event.sale_date else None),
                              ("Prices", _clip(event.price_summary, 70)),
-                             ("Status", (event.status or "").replace("_", " "))):
+                             ("Status", status_text(event, now))):
             if value:
                 text += f"\n{label}: {value}"
         if kind == "latest" and event.discovery_kind == "discovered" and event.discovered_at:

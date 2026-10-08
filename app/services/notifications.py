@@ -15,6 +15,7 @@ from app.models import Alert, Event
 from app.services.watchlist import WatchMatch, matched_watchlists_for_event
 from app.services.sale_windows import ReminderSale, reminder_sales
 from app.services.telegram_payload import message_payload
+from app.services.event_presentation import status_text
 
 logger = logging.getLogger(__name__)
 
@@ -226,8 +227,7 @@ def format_event_message(event: Event, alert_type: str = "new_event", now=None) 
     if event.price_summary:
         lines.append(f"Prices: {event.price_summary}")
     if event.status in {"cancelled", "postponed", "sold_out", "unavailable"}:
-        status = "Not currently on sale" if event.status == "unavailable" else event.status.replace("_", " ")
-        lines.append(f"Status: {status}")
+        lines.append(f"Status: {status_text(event, now)}")
     lines.append(f"URL: {event.url}")
     lines.extend(_additional_source_links(event))
     concert_calendar_url = _google_calendar_url(
@@ -268,7 +268,7 @@ def format_sale_reminder_message(event: Event, keyword: str, reminder_hours: int
     if event.price_summary:
         lines.append(f"Prices: {event.price_summary}")
     if event.status in {"cancelled", "postponed", "sold_out", "unavailable"}:
-        lines.append(f"Status: {event.status.replace(chr(95), chr(32))}")
+        lines.append(f"Status: {status_text(event)}")
     lines.append(f"URL: {event.url}")
     lines.extend(_additional_source_links(event))
     sale_calendar_url = _google_calendar_url(

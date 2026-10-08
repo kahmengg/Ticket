@@ -21,19 +21,30 @@ class DetectionResult:
     source_results: list[dict] = field(default_factory=list)
 
 
-def generate_content_hash(event: ScrapedEvent | dict) -> str:
-    payload = {
-        "title": _normalize(event.get("title")),
-        "artist_name": _normalize(event.get("artist_name")),
+def meaningful_fields(event):
+    # Provider links and artist fallback metadata aren't user-facing concert changes.
+    return {
+        "title": normalized(event.get("title")),
         "presale_date": _normalize_datetime(event.get("presale_date")),
-        "venue_name": _normalize(event.get("venue_name")),
+        "venue_name": normalized(event.get("venue_name")),
         "event_date": _normalize_datetime(event.get("event_date")),
         "sale_date": _normalize_datetime(event.get("sale_date")),
-        "url": event.get("url"),
         "status": _normalize(event.get("status") or "active"),
         "price_summary": _normalize(event.get("price_summary")),
         "currency": _normalize(event.get("currency")),
     }
+
+
+def changed_field_labels(before, after):
+    labels = dict(title="title", venue_name="venue", event_date="performance date",
+                  sale_date="general sale", presale_date="presale", status="ticket status",
+                  price_summary="prices", currency="currency")
+    old, new = meaningful_fields(before), meaningful_fields(after)
+    return [labels[key] for key in old if old[key] != new[key]]
+
+
+def generate_content_hash(event: ScrapedEvent | dict) -> str:
+    payload = meaningful_fields(event)
     serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
@@ -43,6 +54,7 @@ def process_events(db: Session, events: list[ScrapedEvent], *, commit: bool = Tr
     result = DetectionResult()
     discovery_at = discovery_at or utc_now()
     touched: dict[int, tuple[Event, str | None]] = {}
+    snapshots = {}
     seen: dict[tuple[str, str], str | None] = {}
     for observation in events:
         scraped = dict(observation)
@@ -78,6 +90,7 @@ def process_events(db: Session, events: list[ScrapedEvent], *, commit: bool = Tr
         else:
             event = listing.event
         if event.id not in touched:
+            snapshots[event.id] = {field: getattr(event, field) for field in CANONICAL_FIELDS}
             touched[event.id] = (event, generate_content_hash({field: getattr(event, field) for field in CANONICAL_FIELDS}))
         update_listing(listing, scraped)
         event.last_seen_at = utc_now()
@@ -91,6 +104,7 @@ def process_events(db: Session, events: list[ScrapedEvent], *, commit: bool = Tr
         if previous_hash is None:
             result.new_events.append(event)
         elif previous_hash != event.content_hash:
+            event.changed_fields = changed_field_labels(snapshots[event.id], {field: getattr(event, field) for field in CANONICAL_FIELDS})
             event.revision += 1
             result.updated_events.append(event)
         else:

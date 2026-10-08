@@ -12,7 +12,7 @@ from app.scrapers.ticketmaster_sg import SourceFetchError, TicketmasterSGScraper
 from app.scrapers.ticketmaster_api import TicketmasterAPIScraper
 from app.models import Event, utc_now
 from app.services.source_matching import CANONICAL_FIELDS
-from app.services.event_detector import DetectionResult, generate_content_hash, process_events
+from app.services.event_detector import DetectionResult, changed_field_labels, generate_content_hash, process_events
 from app.services.notifications import deliver_pending_alerts, queue_event_alerts, send_sale_reminder_alerts
 from app.services.job_lock import CheckAlreadyRunning, source_check_lock
 from app.services.watchlist import sale_reminder_matches
@@ -59,6 +59,8 @@ def run_event_check(db: Session | None = None, *, scrapers=None) -> DetectionRes
                     logger.warning("Source fetch failed: %s (%s)", scraper.source_name, reason)
             before = {event.id: (generate_content_hash({field: getattr(event, field) for field in CANONICAL_FIELDS}), event.revision)
                       for event in session.scalars(select(Event))}
+            snapshots = {event.id: {field: getattr(event, field) for field in CANONICAL_FIELDS}
+                         for event in session.scalars(select(Event))}
             touched, eligible = set(), set()
             for scraper, observations, error in batches:
                 source = crud.get_or_create_source(session, scraper.source_name, scraper.base_url)
@@ -101,6 +103,7 @@ def run_event_check(db: Session | None = None, *, scrapers=None) -> DetectionRes
                     event.revision = 1
                     result.new_events.append(event)
                 elif previous[0] != current_hash:
+                    event.changed_fields = changed_field_labels(snapshots[event_id], {field: getattr(event, field) for field in CANONICAL_FIELDS})
                     event.revision = previous[1] + 1
                     result.updated_events.append(event)
                 else:

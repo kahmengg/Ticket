@@ -22,7 +22,7 @@ def test_inactive_performances_are_not_upcoming_or_reminded(db_session, status):
     assert crud.list_upcoming_events(db_session, now) == []
     assert crud.list_upcoming_events_limited(db_session, now) == []
     assert sale_reminder_matches(db_session, 1, now) == []
-    assert f"Status: {status}" in format_event_message(event)
+    assert f"Status: {status.capitalize()}" in format_event_message(event)
     assert "Prices: SGD 100" in format_event_message(event)
 
 
