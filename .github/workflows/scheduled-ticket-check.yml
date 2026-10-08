@@ -28,6 +28,7 @@ jobs:
 
           # This wakes Render and performs a real Supabase query.
           curl --fail-with-body --show-error --silent \
+            --retry 3 --retry-delay 15 --retry-max-time 120 \
             --max-time 660 --output check-result.json \
             --request POST "${TICKET_CHECK_URL%/}/run-check" \
             --header "Authorization: Bearer $RUN_CHECK_SECRET"
