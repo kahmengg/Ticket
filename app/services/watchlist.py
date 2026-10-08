@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app import crud
 from app.models import Event, WatchlistKeyword
+from app.services.sale_windows import ReminderSale, reminder_sales
 
 
 MIN_KEYWORD_LENGTH = 2
@@ -24,6 +25,7 @@ class WatchMatch:
     chat_id: str
     keyword: str
     event: Event
+    sale: ReminderSale | None = None
 
 
 def normalize_keyword(raw_keyword: str) -> NormalizedKeyword:
@@ -84,13 +86,12 @@ def sale_reminder_matches(db: Session, reminder_hours: int, now: datetime | None
     window_end = now + timedelta(hours=reminder_hours)
     matches: list[WatchMatch] = []
     for event in crud.list_events(db):
-        sale_date = event.sale_date
-        if sale_date is None or event.status in {"cancelled", "postponed"}:
+        if event.status in {"cancelled", "postponed"}:
             continue
-        if sale_date.tzinfo is None:
-            sale_date = sale_date.replace(tzinfo=timezone.utc)
-        if now <= sale_date <= window_end:
-            matches.extend(matched_watchlists_for_event(db, event))
+        for sale in reminder_sales(event):
+            if now < sale.starts_at <= window_end:
+                matches.extend(WatchMatch(m.chat_id, m.keyword, event, sale)
+                               for m in matched_watchlists_for_event(db, event))
     return matches
 
 

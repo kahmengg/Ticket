@@ -18,14 +18,14 @@ def test_format_event_message_removes_leading_year_and_adds_calendar_link():
         content_hash="hash",
     )
 
-    message = format_event_message(event)
+    message = format_event_message(event, now=datetime(2026, 6, 1, tzinfo=timezone.utc))
 
-    assert message.startswith("BABYMONSTER WORLD TOUR [춤 (CHOOM)] IN SINGAPORE")
+    assert message.startswith("Concert found\nBABYMONSTER WORLD TOUR [춤 (CHOOM)] IN SINGAPORE")
     assert "New event detected" not in message
     assert "Title:" not in message
     assert "Venue: Singapore Indoor Stadium" in message
     assert "Event date: 28 Nov 2026, 06:00 PM SGT" in message
-    assert "Sale date: 11 Jun 2026, 12:00 PM SGT" in message
+    assert "General sale opens: 11 Jun 2026, 12:00 PM SGT" in message
     assert "Add concert to calendar: https://calendar.google.com/calendar/render?" in message
     assert "Add ticket sale to calendar: https://calendar.google.com/calendar/render?" in message
     assert "Ticket+sale%3A+BABYMONSTER" in message

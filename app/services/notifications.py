@@ -13,6 +13,8 @@ from app import crud
 from app.config import settings
 from app.models import Alert, Event
 from app.services.watchlist import WatchMatch, matched_watchlists_for_event
+from app.services.sale_windows import ReminderSale, reminder_sales
+from app.services.telegram_payload import message_payload
 
 logger = logging.getLogger(__name__)
 
@@ -77,12 +79,16 @@ def send_sale_reminder_alerts(matches: list[WatchMatch], reminder_hours: int, db
         if crud.telegram_subscription_state(db, match.chat_id) is not True:
             continue
         event = match.event
-        if event.id is None or event.sale_date is None or event.status in {"cancelled", "postponed"}:
+        sale = match.sale or (ReminderSale("general", "General sale", event.sale_date, "general") if event.sale_date else None)
+        if event.id is None or sale is None or event.status in {"cancelled", "postponed"}:
             continue
-        sale_date = _utc(event.sale_date)
-        key = f"sale_reminder_{reminder_hours}h:{sale_date.isoformat()}"
+        sale_date = _utc(sale.starts_at)
+        key = sale.key(reminder_hours)
+        # A delayed run inside the short window should send one timely reminder, not both.
+        if reminder_hours > 1 and sale_date <= datetime.now(timezone.utc) + timedelta(hours=1):
+            continue
         _queue_alert(db, event, key, match.chat_id,
-                     format_sale_reminder_message(event, match.keyword, reminder_hours), sale_date)
+                     format_sale_reminder_message(event, match.keyword, reminder_hours, sale), sale_date)
     db.commit()
     return deliver_pending_alerts(db)
 
@@ -124,21 +130,27 @@ def deliver_pending_alerts(db: Session, now=None, limit: int = 100) -> int:
         cancelled = active is False
         if alert.sale_date is not None:
             # Recheck expiry, rescheduling and /unwatch after a failed or delayed send.
-            cancelled = cancelled or active is not True or event.sale_date is None
+            cancelled = cancelled or active is not True
             cancelled = cancelled or event.status in {"cancelled", "postponed"}
             cancelled = cancelled or _utc(alert.sale_date) <= delivery_time
-            cancelled = cancelled or (event.sale_date is not None and _utc(event.sale_date) != _utc(alert.sale_date))
+            hours = int(alert.alert_type.split("_reminder_", 1)[1].split("h:", 1)[0])
+            cancelled = cancelled or not any(sale.key(hours) == alert.alert_type for sale in reminder_sales(event))
             cancelled = cancelled or not any(
                 watch.chat_id == alert.chat_id for watch in matched_watchlists_for_event(db, event)
             )
         if cancelled:
             state, sent_at, retry_at = "cancelled", None, None
-        elif send_telegram_message_to_chat(alert.chat_id, alert.message):
-            state, sent_at, retry_at = "sent", datetime.now(timezone.utc), None
-            sent += 1
         else:
-            state, sent_at = "pending", None
-            retry_at = delivery_time + timedelta(minutes=min(60, 2 ** min(alert.attempts, 6)))
+            delivered = send_telegram_message_to_chat(alert.chat_id, alert.message)
+            if delivered is None:
+                state, sent_at, retry_at = "failed", None, None
+            else:
+                if delivered:
+                    state, sent_at, retry_at = "sent", datetime.now(timezone.utc), None
+                    sent += 1
+                else:
+                    state, sent_at = "pending", None
+                    retry_at = delivery_time + timedelta(minutes=min(60, 2 ** min(alert.attempts, 6)))
         db.execute(update(Alert).where(Alert.id == alert_id, Alert.lease_token == token).values(
             delivery_state=state, sent_at=sent_at, next_attempt_at=retry_at, lease_token=None,
         ))
@@ -159,7 +171,7 @@ def send_telegram_message(message: str, chat_ids: list[str] | None = None) -> in
     return sent_count
 
 
-def send_telegram_message_to_chat(chat_id: str, message: str) -> bool:
+def send_telegram_message_to_chat(chat_id: str, message: str) -> bool | None:
     if not settings.telegram_bot_token:
         return False
 
@@ -175,13 +187,17 @@ def get_notification_chat_ids(db: Session | None = None) -> list[str]:
     return list(dict.fromkeys(chat_ids))
 
 
-def _send_telegram_message_to_chat(url: str, chat_id: str, message: str) -> bool:
+def _send_telegram_message_to_chat(url: str, chat_id: str, message: str) -> bool | None:
     try:
         response = requests.post(
             url,
-            json={"chat_id": chat_id, "text": message, "disable_web_page_preview": False},
+            json=message_payload(chat_id, message),
             timeout=10,
         )
+        if response.status_code in {400, 403, 404}:
+            logger.warning("Telegram permanently rejected delivery (HTTP %s).", response.status_code)
+            # None marks a permanent rejection; False remains retryable.
+            return None
         response.raise_for_status()
         return True
     except requests.RequestException:
@@ -189,23 +205,29 @@ def _send_telegram_message_to_chat(url: str, chat_id: str, message: str) -> bool
         return False
 
 
-def format_event_message(event: Event, alert_type: str = "new_event") -> str:
+def format_event_message(event: Event, alert_type: str = "new_event", now=None) -> str:
+    now = now or datetime.now(timezone.utc)
     title = _clean_event_title(event.title)
-    lines = [title]
+    lines = ["Concert found", title]
     if alert_type == "event_updated":
-        lines.insert(0, "Event details updated")
+        lines[0] = "Event details updated"
+        if getattr(event, "changed_fields", None):
+            lines.append("Changed: " + ", ".join(event.changed_fields))
     if event.venue_name:
         lines.append(f"Venue: {event.venue_name}")
     if event.event_date:
         lines.append(f"Event date: {_format_datetime(event.event_date)}")
     if event.sale_date:
-        lines.append(f"Sale date: {_format_datetime(event.sale_date)}")
+        label = "General sale started" if _utc(event.sale_date) <= now else "General sale opens"
+        lines.append(f"{label}: {_format_datetime(event.sale_date)}")
     if event.presale_date:
-        lines.append(f"Presale date: {_format_datetime(event.presale_date)}")
+        label = "Presale started" if _utc(event.presale_date) <= now else "Presale opens"
+        lines.append(f"{label}: {_format_datetime(event.presale_date)}")
     if event.price_summary:
         lines.append(f"Prices: {event.price_summary}")
     if event.status in {"cancelled", "postponed", "sold_out", "unavailable"}:
-        lines.append(f"Status: {event.status.replace(chr(95), chr(32))}")
+        status = "Not currently on sale" if event.status == "unavailable" else event.status.replace("_", " ")
+        lines.append(f"Status: {status}")
     lines.append(f"URL: {event.url}")
     lines.extend(_additional_source_links(event))
     concert_calendar_url = _google_calendar_url(
@@ -215,7 +237,7 @@ def format_event_message(event: Event, alert_type: str = "new_event") -> str:
         details=event.url,
         location=event.venue_name,
     )
-    if concert_calendar_url:
+    if concert_calendar_url and _utc(event.event_date) > now and event.status not in {"cancelled", "postponed"}:
         lines.append(f"Add concert to calendar: {concert_calendar_url}")
     sale_calendar_url = _google_calendar_url(
         title=f"Ticket sale: {_clean_event_title(event.title)}",
@@ -224,22 +246,23 @@ def format_event_message(event: Event, alert_type: str = "new_event") -> str:
         details=event.url,
         location=event.venue_name,
     )
-    if sale_calendar_url:
+    if sale_calendar_url and _utc(event.sale_date) > now and event.status not in {"cancelled", "postponed"}:
         lines.append(f"Add ticket sale to calendar: {sale_calendar_url}")
     return "\n".join(lines)
 
 
-def format_sale_reminder_message(event: Event, keyword: str, reminder_hours: int) -> str:
+def format_sale_reminder_message(event: Event, keyword: str, reminder_hours: int, sale=None) -> str:
     hours_text = "1 hour" if reminder_hours == 1 else f"{reminder_hours} hours"
     lines = [
-        f"Reminder: ticket sale starts within {hours_text}",
+        f"Reminder: {sale.name if sale else 'ticket sale'} starts within {hours_text}",
         f"Watchlist: {keyword}",
         _clean_event_title(event.title),
     ]
     if event.venue_name:
         lines.append(f"Venue: {event.venue_name}")
-    if event.sale_date:
-        lines.append(f"Sale date: {_format_datetime(event.sale_date)}")
+    reminder_date = sale.starts_at if sale else event.sale_date
+    if reminder_date:
+        lines.append(f"Sale date: {_format_datetime(reminder_date)}")
     if event.event_date:
         lines.append(f"Event date: {_format_datetime(event.event_date)}")
     if event.price_summary:
@@ -250,7 +273,7 @@ def format_sale_reminder_message(event: Event, keyword: str, reminder_hours: int
     lines.extend(_additional_source_links(event))
     sale_calendar_url = _google_calendar_url(
         title=f"Ticket sale: {_clean_event_title(event.title)}",
-        start=event.sale_date,
+        start=reminder_date,
         duration=timedelta(minutes=30),
         details=event.url,
         location=event.venue_name,
