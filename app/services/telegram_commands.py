@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app import crud
 from app.models import Event
 from app.services.notifications import _clean_event_title, _format_datetime
+from app.services.event_presentation import status_text
 from app.services.watchlist import add_watch_keyword, matching_events_for_keyword, remove_watch_keyword
 
 
@@ -12,7 +13,7 @@ HELP_MESSAGE = """Ticket Sale Assistant commands:
 /start - subscribe to alerts
 /upcoming - browse upcoming concerts (Next/Previous)
 /latest - browse newest discoveries (Next/Previous)
-/watch artist - watch an artist or event keyword
+/watch artist - get presale and general-sale reminders
 /watchlist - show your watched keywords
 /unwatch artist - remove a watched keyword
 /stop - unsubscribe from alerts
@@ -99,7 +100,7 @@ def _compact_event_message(event: Event) -> str:
                          ("Event date", _format_datetime(event.event_date) if event.event_date else None),
                          ("Sale date", _format_datetime(event.sale_date) if event.sale_date else None),
                          ("Presale date", _format_datetime(event.presale_date) if event.presale_date else None),
-                         ("Prices", event.price_summary), ("Status", event.status)):
+                         ("Prices", event.price_summary), ("Status", status_text(event))):
         if value:
             lines.append(f"{label}: {value}")
     lines.append(f"URL: {event.url}")

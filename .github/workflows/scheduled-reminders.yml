@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: scheduled-sale-reminders
@@ -17,6 +18,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - uses: actions/checkout@v4
+      - name: Report overdue reminder scheduling
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/check_schedule_gap.py
       - name: Check stored sale reminders and pending deliveries
         env:
           TICKET_CHECK_URL: ${{ vars.TICKET_CHECK_URL }}

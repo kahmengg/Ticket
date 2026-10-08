@@ -1,6 +1,6 @@
 """Choose a single provider's sale windows and retain stable reminder identities."""
 from dataclasses import dataclass
-from datetime import timezone
+from datetime import datetime, timezone
 import hashlib
 
 
@@ -12,7 +12,7 @@ def utc(value):
 class ReminderSale:
     kind: str
     name: str
-    starts_at: object
+    starts_at: datetime
     identity: str
 
     def key(self, hours):

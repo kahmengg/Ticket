@@ -9,6 +9,8 @@ from app.models import Alert, Event
 from app.services import notifications as notify
 from app.services.telegram_payload import message_payload
 from app.services.watchlist import add_watch_keyword, sale_reminder_matches
+from app.services.event_detector import process_events
+from app.services.sale_windows import reminder_sales
 
 
 def test_long_unicode_alert_is_bounded_and_ticket_link_survives():
@@ -61,3 +63,33 @@ def test_permanent_delivery_failure_stops_retrying(db_session, monkeypatch):
     notify.send_new_event_alerts([event], db_session)
     assert db_session.scalar(select(Alert)).delivery_state == "failed"
     assert notify.deliver_pending_alerts(db_session) == 0
+
+
+def test_named_presales_have_distinct_stable_reminder_keys(db_session):
+    now = datetime.now(timezone.utc)
+    event = process_events(db_session, [dict(source_name="Ticketmaster Discovery Singapore",
+        source_event_id="one", title="Artist", url="https://example.com", sale_windows=[
+            dict(external_id="fan", name="Fan club", kind="presale", starts_at=now + timedelta(days=1), ends_at=None),
+            dict(external_id="bank", name="Cardholder", kind="presale", starts_at=now + timedelta(days=2), ends_at=None),
+        ])]).new_events[0]
+    sales = reminder_sales(event)
+    assert {s.name for s in sales} == {"Fan club", "Cardholder"}
+    assert len({s.key(1) for s in sales}) == 2
+    assert all(len(s.key(24)) <= 100 for s in sales)
+
+
+def test_shorter_reminder_suppression_respects_configuration(monkeypatch):
+    now = datetime.now(timezone.utc)
+    monkeypatch.setattr(notify, "settings", SimpleNamespace(sale_reminder_hours=[24]))
+    assert not notify._shorter_reminder_due(24, now + timedelta(minutes=30), now)
+    monkeypatch.setattr(notify, "settings", SimpleNamespace(sale_reminder_hours=[24, 1]))
+    assert notify._shorter_reminder_due(24, now + timedelta(minutes=30), now)
+
+
+def test_telegram_permanent_and_temporary_responses(monkeypatch):
+    response = Mock(status_code=403)
+    monkeypatch.setattr(notify.requests, "post", Mock(return_value=response))
+    assert notify._send_telegram_message_to_chat("https://example.com", "123", "Hello") is None
+    response.status_code = 429
+    response.raise_for_status.side_effect = notify.requests.HTTPError()
+    assert notify._send_telegram_message_to_chat("https://example.com", "123", "Hello") is False

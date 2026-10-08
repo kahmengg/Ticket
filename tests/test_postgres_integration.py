@@ -27,9 +27,10 @@ with engine.begin() as conn:
 init_db()
 init_db()
 with engine.connect() as conn:
-    assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "20260910_0005"
+    assert conn.scalar(text("SELECT version_num FROM alembic_version")) == "20261008_0006"
     assert conn.execute(text("SELECT discovery_kind, discovered_at, sort_title FROM events WHERE id=9001")).one() == ('legacy', None, 'artist tour')
     assert conn.scalar(text("SELECT message FROM alerts WHERE event_id=9001")) == 'retained'
+    assert conn.execute(text("SELECT relname, relrowsecurity FROM pg_class WHERE relname IN ('source_listings','sale_windows') ORDER BY relname")).all() == [('sale_windows', True), ('source_listings', True)]
     assert 'ix_events_browse_discovery' in {i['name'] for i in inspect(conn).get_indexes('events')}
 with source_check_lock(engine) as first:
     assert first

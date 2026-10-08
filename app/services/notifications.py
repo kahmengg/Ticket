@@ -86,7 +86,7 @@ def send_sale_reminder_alerts(matches: list[WatchMatch], reminder_hours: int, db
         sale_date = _utc(sale.starts_at)
         key = sale.key(reminder_hours)
         # A delayed run inside the short window should send one timely reminder, not both.
-        if reminder_hours > 1 and sale_date <= datetime.now(timezone.utc) + timedelta(hours=1):
+        if _shorter_reminder_due(reminder_hours, sale_date, datetime.now(timezone.utc)):
             continue
         _queue_alert(db, event, key, match.chat_id,
                      format_sale_reminder_message(event, match.keyword, reminder_hours, sale), sale_date)
@@ -96,6 +96,11 @@ def send_sale_reminder_alerts(matches: list[WatchMatch], reminder_hours: int, db
 
 def _utc(value):
     return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+
+
+def _shorter_reminder_due(hours, sale_date, now):
+    return any(shorter < hours and sale_date <= now + timedelta(hours=shorter)
+               for shorter in getattr(settings, "sale_reminder_hours", [24, 1]))
 
 
 def claim_alert(db: Session, alert_id: int, now) -> str | None:
@@ -135,6 +140,7 @@ def deliver_pending_alerts(db: Session, now=None, limit: int = 100) -> int:
             cancelled = cancelled or event.status in {"cancelled", "postponed"}
             cancelled = cancelled or _utc(alert.sale_date) <= delivery_time
             hours = int(alert.alert_type.split("_reminder_", 1)[1].split("h:", 1)[0])
+            cancelled = cancelled or _shorter_reminder_due(hours, _utc(alert.sale_date), delivery_time)
             cancelled = cancelled or not any(sale.key(hours) == alert.alert_type for sale in reminder_sales(event))
             cancelled = cancelled or not any(
                 watch.chat_id == alert.chat_id for watch in matched_watchlists_for_event(db, event)
@@ -218,6 +224,8 @@ def format_event_message(event: Event, alert_type: str = "new_event", now=None) 
         lines.append(f"Venue: {event.venue_name}")
     if event.event_date:
         lines.append(f"Event date: {_format_datetime(event.event_date)}")
+    else:
+        lines.append("Event date: To be confirmed")
     if event.sale_date:
         label = "General sale started" if _utc(event.sale_date) <= now else "General sale opens"
         lines.append(f"{label}: {_format_datetime(event.sale_date)}")

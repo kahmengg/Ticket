@@ -57,10 +57,10 @@ def run_event_check(db: Session | None = None, *, scrapers=None) -> DetectionRes
                     reason = str(exc) if isinstance(exc, SourceFetchError) else type(exc).__name__
                     batches.append((scraper, [], reason))
                     logger.warning("Source fetch failed: %s (%s)", scraper.source_name, reason)
-            before = {event.id: (generate_content_hash({field: getattr(event, field) for field in CANONICAL_FIELDS}), event.revision)
-                      for event in session.scalars(select(Event))}
-            snapshots = {event.id: {field: getattr(event, field) for field in CANONICAL_FIELDS}
-                         for event in session.scalars(select(Event))}
+            before, snapshots = {}, {}
+            for event in session.scalars(select(Event)):
+                snapshots[event.id] = {field: getattr(event, field) for field in CANONICAL_FIELDS}
+                before[event.id] = (generate_content_hash(snapshots[event.id]), event.revision)
             touched, eligible = set(), set()
             for scraper, observations, error in batches:
                 source = crud.get_or_create_source(session, scraper.source_name, scraper.base_url)
